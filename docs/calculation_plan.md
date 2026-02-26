@@ -251,7 +251,7 @@ At latitudes ≥ 55°, the method switches to night-fraction-based calculation.
 | `high-latitude.ts` | Fallback strategies (middle_of_night, seventh_of_night, twilight_angle) with side-aware anchoring (fajr from sunrise, isha from sunset).                                                                                                                                                                     |
 | `format.ts`        | `formatLocal()` — IANA timezone to local HH:MM string. Cached `Intl.DateTimeFormat` objects. Nearest-minute rounding.                                                                                                                                                                                        |
 | `qibla.ts`         | `computeQibla(lat, lng)` — great-circle bearing to Kaaba (21.4225°N, 39.8261°E).                                                                                                                                                                                                                             |
-| `sunnah.ts`        | `computeSunnahTimes(sunsetMs, nextDayFajrMs)` — night-division returning `{ middleOfTheNight: number, lastThirdOfTheNight: number }` as epoch ms.                                                                                                                                                                                  |
+| `sunnah.ts`        | `computeSunnahTimes(sunsetMs, nextDayFajrMs)` — night-division returning `{ middleOfTheNight: number, lastThirdOfTheNight: number }` as epoch ms.                                                                                                                                                            |
 | `prayer-utils.ts`  | `timeForPrayer()`, `currentPrayer()`, `nextPrayer()`, `nightPortions()`, `recommendedHighLatRule()`.                                                                                                                                                                                                         |
 | `date-utils.ts`    | `dayOfYear()`, `isLeapYear()`, `dateByAddingDays/Minutes/Seconds()`, `roundedMinute()`, `decomposeHours()`, `daysSinceSolstice()`.                                                                                                                                                                           |
 | `moonsighting.ts`  | MoonsightingCommittee seasonal twilight — `seasonAdjustedMorningTwilight()`, `seasonAdjustedEveningTwilight()`. 3 Shafaq variants with piecewise interpolation.                                                                                                                                              |
@@ -261,36 +261,36 @@ At latitudes ≥ 55°, the method switches to night-fraction-based calculation.
 
 #### Inputs
 
-| Parameter      | Type                     | Example                           | Description                       |
-| -------------- | ------------------------ | --------------------------------- | --------------------------------- |
-| `latitude`     | number (−90 to 90)       | `40.7128`                         | Observer latitude, positive north |
-| `longitude`    | number (−180 to 180)     | `-74.006`                         | Observer longitude, positive east |
-| `date`         | number (epoch ms)        | `Date.UTC(2026, 1, 25)`           | Calendar date as epoch ms (UTC midnight) |
-| `timezoneId`   | string                   | `"America/New_York"`              | IANA timezone ID                  |
-| `method`       | MethodAngles             | `MethodProfile.Karachi`           | Fajr/Isha angle pair              |
-| `madhab`       | `"standard" \| "hanafi"` | `"hanafi"`                        | Asr shadow factor                 |
-| `highLatRule`  | string                   | `"middle_of_night"`               | Fallback for undefined Fajr/Isha  |
-| `polarRule`    | string                   | `"unresolved"`                    | Fallback for polar conditions     |
-| `midnightMode` | string                   | `"standard"`                      | Midnight calculation mode         |
-| `adjustments`  | PrayerAdjustments        | `NO_ADJUSTMENTS`                  | Per-prayer minute offsets         |
-| `elevation`    | number (≥ 0)             | `0`                               | Meters above terrain              |
+| Parameter      | Type                     | Example                 | Description                              |
+| -------------- | ------------------------ | ----------------------- | ---------------------------------------- |
+| `latitude`     | number (−90 to 90)       | `40.7128`               | Observer latitude, positive north        |
+| `longitude`    | number (−180 to 180)     | `-74.006`               | Observer longitude, positive east        |
+| `date`         | number (epoch ms)        | `Date.UTC(2026, 1, 25)` | Calendar date as epoch ms (UTC midnight) |
+| `timezoneId`   | string                   | `"America/New_York"`    | IANA timezone ID                         |
+| `method`       | MethodAngles             | `MethodProfile.Karachi` | Fajr/Isha angle pair                     |
+| `madhab`       | `"standard" \| "hanafi"` | `"hanafi"`              | Asr shadow factor                        |
+| `highLatRule`  | string                   | `"middle_of_night"`     | Fallback for undefined Fajr/Isha         |
+| `polarRule`    | string                   | `"unresolved"`          | Fallback for polar conditions            |
+| `midnightMode` | string                   | `"standard"`            | Midnight calculation mode                |
+| `adjustments`  | PrayerAdjustments        | `NO_ADJUSTMENTS`        | Per-prayer minute offsets                |
+| `elevation`    | number (≥ 0)             | `0`                     | Meters above terrain                     |
 
 #### Outputs
 
-| Output       | Type             | How it's derived                                        |
-| ------------ | ---------------- | ------------------------------------------------------- |
-| `fajr`       | PrayerTimeResult | `transit − T(−fajr_angle)` via corrected hour angle     |
-| `sunrise`    | PrayerTimeResult | `transit − T(−0.8333° − 0.0347×√elevation)`             |
-| `dhuhr`      | PrayerTimeResult | Corrected solar transit + method adjustment             |
-| `asr`        | PrayerTimeResult | `transit + T(arctan(1 / (factor + tan\|φ−δ\|)))`        |
-| `sunset`     | PrayerTimeResult | Raw astronomical sunset (no adjustments applied)        |
-| `maghrib`    | PrayerTimeResult | Sunset + maghrib adjustment                             |
-| `isha`       | PrayerTimeResult | `transit + T(−isha_angle)` or maghrib + interval        |
-| `midnight`   | PrayerTimeResult | Midpoint of sunset → next sunrise (lazy)                |
-| `imsak`      | PrayerTimeResult | Fajr − 10 minutes (lazy)                                |
-| `firstThird` | PrayerTimeResult | Sunset + night/3 (lazy)                                 |
-| `lastThird`  | PrayerTimeResult | Sunset + 2×night/3 (lazy)                               |
-| `meta`       | object           | `{ declination, eqtMinutes, solarNoonMs, julianDate }`  |
+| Output       | Type             | How it's derived                                       |
+| ------------ | ---------------- | ------------------------------------------------------ |
+| `fajr`       | PrayerTimeResult | `transit − T(−fajr_angle)` via corrected hour angle    |
+| `sunrise`    | PrayerTimeResult | `transit − T(−0.8333° − 0.0347×√elevation)`            |
+| `dhuhr`      | PrayerTimeResult | Corrected solar transit + method adjustment            |
+| `asr`        | PrayerTimeResult | `transit + T(arctan(1 / (factor + tan\|φ−δ\|)))`       |
+| `sunset`     | PrayerTimeResult | Raw astronomical sunset (no adjustments applied)       |
+| `maghrib`    | PrayerTimeResult | Sunset + maghrib adjustment                            |
+| `isha`       | PrayerTimeResult | `transit + T(−isha_angle)` or maghrib + interval       |
+| `midnight`   | PrayerTimeResult | Midpoint of sunset → next sunrise (lazy)               |
+| `imsak`      | PrayerTimeResult | Fajr − 10 minutes (lazy)                               |
+| `firstThird` | PrayerTimeResult | Sunset + night/3 (lazy)                                |
+| `lastThird`  | PrayerTimeResult | Sunset + 2×night/3 (lazy)                              |
+| `meta`       | object           | `{ declination, eqtMinutes, solarNoonMs, julianDate }` |
 
 Each `PrayerTimeResult` is a discriminated union:
 

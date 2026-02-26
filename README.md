@@ -58,6 +58,60 @@ Five parameters are required: `latitude`, `longitude`, `date`, `timezoneId`, and
 
 ---
 
+## 💻 CLI — `waqt`
+
+Prayer times right in your terminal. Powered by this library.
+
+### Install
+
+```bash
+npm install -g masjiduna-waqt
+```
+
+```bash
+bun install -g masjiduna-waqt
+```
+
+Or download a standalone native binary (no Node/Bun required) from
+[GitHub Releases](https://github.com/arafathusayn/masjiduna-waqt/releases):
+`waqt-darwin-arm64`, `waqt-darwin-x64`, `waqt-linux-x64`, `waqt-linux-arm64`, `waqt-windows-x64.exe`.
+
+### Quick start
+
+```bash
+waqt set              # interactive setup wizard (location, method, timezone)
+waqt                  # show today's prayer times
+waqt --date "tomorrow"
+waqt --date "next friday"
+waqt --date "2026-03-15"
+waqt --help
+```
+
+```
+  ╭──────────────────────────────────────────╮
+  │  Waqt v1.0.1  Thu, 26 Feb 2026           │
+  │                  Standard                │
+  ╰──────────────────────────────────────────╯
+
+       Imsak       05:10 AM
+       Fajr        05:20 AM
+       Sunrise     06:39 AM
+       Dhuhr       12:08 PM   ◀
+       Asr         03:32 PM
+       Sunset      05:39 PM
+       Maghrib     05:39 PM
+       Isha        06:55 PM
+
+       ────────────────────
+       Midnight    11:29 PM
+       First Third 07:12 PM
+       Last Third  09:50 PM
+```
+
+Config is saved to `~/.waqt/config.json`.
+
+---
+
 ## 📖 API
 
 ### `computePrayerTimes(config)`

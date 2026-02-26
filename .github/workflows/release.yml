@@ -15,6 +15,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -26,10 +28,19 @@ jobs:
       - name: Build platform binaries
         run: bun run build:bin
 
+      - name: Extract tag annotation
+        id: tag_body
+        run: |
+          BODY=$(git tag -l --format='%(contents)' "${{ github.ref_name }}")
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Waqt ${{ github.ref_name }}
+          body: ${{ steps.tag_body.outputs.body }}
           generate_release_notes: true
           files: |
             dist/waqt-darwin-arm64

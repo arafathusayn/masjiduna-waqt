@@ -17,7 +17,7 @@ for (const { flag, outfile } of TARGETS) {
   await Bun.$`bun build bin/waqt.ts --compile --bytecode --minify --target ${flag} --outfile dist/${outfile}`.quiet();
 }
 
-// Build the launcher as Node ESM, prepend shebang, write to dist/waqt.mjs
+// Build the launcher as Node ESM, prepend shebang, write to dist/waqt
 process.stdout.write("  building launcher...\n");
 const launcherBuild = await Bun.build({
   entrypoints: ["bin/launcher.ts"],
@@ -30,7 +30,7 @@ if (!launcherBuild.success) {
   process.exit(1);
 }
 const launcherCode = await launcherBuild.outputs[0]!.text();
-await Bun.write("dist/waqt.mjs", `#!/usr/bin/env node\n${launcherCode}`);
-await Bun.$`chmod +x dist/waqt.mjs`;
+await Bun.write("dist/waqt", `#!/usr/bin/env node\n${launcherCode}`);
+await Bun.$`chmod +x dist/waqt`;
 
 process.stdout.write("  done\n");

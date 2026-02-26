@@ -278,7 +278,7 @@ async function pickTimezone(initialValue?: string): Promise<string | null> {
       message: "Timezone — type to search (e.g. Dhaka, Riyadh)",
       initialValue: initialValue ?? "",
       validate: (v) =>
-        v.trim().length > 0 ? undefined : "Enter a search term",
+        (v ?? "").trim().length > 0 ? undefined : "Enter a search term",
     });
     if (p.isCancel(query)) return null;
 
@@ -321,7 +321,7 @@ async function runSet(existing?: WaqtConfig): Promise<void> {
     message: "Latitude (−90 to 90, positive = North)",
     initialValue: existing?.latitude?.toString() ?? "",
     validate: (v) => {
-      const n = parseFloat(v);
+      const n = parseFloat(v ?? "");
       if (isNaN(n) || n < -90 || n > 90)
         return "Must be a number between -90 and 90";
     },
@@ -335,7 +335,7 @@ async function runSet(existing?: WaqtConfig): Promise<void> {
     message: "Longitude (−180 to 180, positive = East)",
     initialValue: existing?.longitude?.toString() ?? "",
     validate: (v) => {
-      const n = parseFloat(v);
+      const n = parseFloat(v ?? "");
       if (isNaN(n) || n < -180 || n > 180)
         return "Must be a number between -180 and 180";
     },
