@@ -251,7 +251,7 @@ At latitudes ≥ 55°, the method switches to night-fraction-based calculation.
 | `high-latitude.ts` | Fallback strategies (middle_of_night, seventh_of_night, twilight_angle) with side-aware anchoring (fajr from sunrise, isha from sunset).                                                                                                                                                                     |
 | `format.ts`        | `formatLocal()` — IANA timezone to local HH:MM string. Cached `Intl.DateTimeFormat` objects. Nearest-minute rounding.                                                                                                                                                                                        |
 | `qibla.ts`         | `computeQibla(lat, lng)` — great-circle bearing to Kaaba (21.4225°N, 39.8261°E).                                                                                                                                                                                                                             |
-| `sunnah.ts`        | `computeSunnahTimes(sunset, nextDayFajr)` — night-division for middleOfTheNight and lastThirdOfTheNight. Lazy Date getters.                                                                                                                                                                                  |
+| `sunnah.ts`        | `computeSunnahTimes(sunsetMs, nextDayFajrMs)` — night-division returning `{ middleOfTheNight: number, lastThirdOfTheNight: number }` as epoch ms.                                                                                                                                                                                  |
 | `prayer-utils.ts`  | `timeForPrayer()`, `currentPrayer()`, `nextPrayer()`, `nightPortions()`, `recommendedHighLatRule()`.                                                                                                                                                                                                         |
 | `date-utils.ts`    | `dayOfYear()`, `isLeapYear()`, `dateByAddingDays/Minutes/Seconds()`, `roundedMinute()`, `decomposeHours()`, `daysSinceSolstice()`.                                                                                                                                                                           |
 | `moonsighting.ts`  | MoonsightingCommittee seasonal twilight — `seasonAdjustedMorningTwilight()`, `seasonAdjustedEveningTwilight()`. 3 Shafaq variants with piecewise interpolation.                                                                                                                                              |
@@ -265,7 +265,7 @@ At latitudes ≥ 55°, the method switches to night-fraction-based calculation.
 | -------------- | ------------------------ | --------------------------------- | --------------------------------- |
 | `latitude`     | number (−90 to 90)       | `40.7128`                         | Observer latitude, positive north |
 | `longitude`    | number (−180 to 180)     | `-74.006`                         | Observer longitude, positive east |
-| `date`         | Date                     | `new Date(Date.UTC(2026, 1, 25))` | Calendar date (UTC midnight)      |
+| `date`         | number (epoch ms)        | `Date.UTC(2026, 1, 25)`           | Calendar date as epoch ms (UTC midnight) |
 | `timezoneId`   | string                   | `"America/New_York"`              | IANA timezone ID                  |
 | `method`       | MethodAngles             | `MethodProfile.Karachi`           | Fajr/Isha angle pair              |
 | `madhab`       | `"standard" \| "hanafi"` | `"hanafi"`                        | Asr shadow factor                 |
@@ -290,13 +290,13 @@ At latitudes ≥ 55°, the method switches to night-fraction-based calculation.
 | `imsak`      | PrayerTimeResult | Fajr − 10 minutes (lazy)                                |
 | `firstThird` | PrayerTimeResult | Sunset + night/3 (lazy)                                 |
 | `lastThird`  | PrayerTimeResult | Sunset + 2×night/3 (lazy)                               |
-| `meta`       | object           | `{ declination, eqtMinutes, solarNoonUtc, julianDate }` |
+| `meta`       | object           | `{ declination, eqtMinutes, solarNoonMs, julianDate }`  |
 
 Each `PrayerTimeResult` is a discriminated union:
 
 ```typescript
 type PrayerTimeResult =
-  | { kind: "valid"; utc: Date; diagnostics: PrayerDiagnostics }
+  | { kind: "valid"; ms: number; diagnostics: PrayerDiagnostics }
   | { kind: "undefined"; reason: string; diagnostics: PrayerDiagnostics };
 ```
 
@@ -312,7 +312,7 @@ import { MethodProfile, NO_ADJUSTMENTS } from "masjiduna-waqt";
 const result = computePrayerTimes({
   latitude: 40.7128,
   longitude: -74.006,
-  date: new Date(Date.UTC(2026, 1, 25)),
+  date: Date.UTC(2026, 1, 25),
   timezoneId: "America/New_York",
   method: MethodProfile.Karachi,
   madhab: "hanafi", // EXPLICIT — not implied by Karachi
@@ -334,17 +334,20 @@ for (const name of [
 ] as const) {
   const prayer = result[name];
   if (prayer.kind === "valid") {
-    console.log(`${name}: ${formatLocal(prayer.utc, "America/New_York")}`);
+    console.log(`${name}: ${formatLocal(prayer.ms, "America/New_York")}`);
   } else {
     console.log(`${name}: UNDEFINED — ${prayer.reason}`);
   }
 }
 
-// Sunnah times
+// Sunnah times — pass today's raw sunset ms and tomorrow's Fajr ms
 import { computeSunnahTimes } from "masjiduna-waqt";
 
-if (result.maghrib.kind === "valid" && result.fajr.kind === "valid") {
-  const sunnah = computeSunnahTimes(result.maghrib.utc, result.fajr.utc);
+if (result.sunset.kind === "valid") {
+  // tomorrowFajrMs should come from the next day's computePrayerTimes() call
+  const tomorrowFajrMs = /* tomorrow's fajr.ms */ 0;
+  const sunnah = computeSunnahTimes(result.sunset.ms, tomorrowFajrMs);
+  // returns { middleOfTheNight: number, lastThirdOfTheNight: number } (epoch ms)
   console.log(
     `Middle of night: ${formatLocal(sunnah.middleOfTheNight, "America/New_York")}`,
   );
@@ -373,10 +376,10 @@ const ctx = createPrayerContext({
 });
 
 for (let d = 0; d < 365; d++) {
-  const r = ctx.compute(new Date(Date.UTC(2026, 0, 1 + d)));
+  const r = ctx.compute(Date.UTC(2026, 0, 1 + d));
   if (r.fajr.kind === "valid") {
     console.log(
-      `Day ${d + 1} Fajr: ${formatLocal(r.fajr.utc, "America/New_York")}`,
+      `Day ${d + 1} Fajr: ${formatLocal(r.fajr.ms, "America/New_York")}`,
     );
   }
 }
@@ -390,19 +393,19 @@ The engine computes 7,300 prayer times (20 locations × 365 days) in **~900µs**
 
 ### Key optimizations
 
-1. **Float64Array(29) PTR** — All 6 prayer results stored in a single typed array (ms×6, cosOmega×6, packed-flags×6, targetAlt×6, meta×4, sunsetMs×1). PTR has only 2 own properties (`_d: Float64Array`, `_uf: number`). Zero V-object allocations on the hot path — V objects are created lazily only when property getters are accessed.
+1. **Float64Array(29) PTR** — All 6 prayer results stored in a module-level `_SLAB: Float64Array` ring buffer (ms×6, cosOmega×6, packed-flags×6, targetAlt×6, meta×4, sunsetMs×1). PTR has only 2 own properties (`_slabOffset: number`, `_undefinedPrayersBitmask: number`). Zero V-object allocations on the hot path — V objects are created lazily only when property getters are accessed.
 
-2. **Bitmask undefined flags** — `_uf` integer packs which prayers are undefined (bits 0–4: fajr, sunrise, asr, sunset/maghrib, isha).
+2. **Bitmask undefined flags** — `_undefinedPrayersBitmask` integer packs which prayers are undefined (bits 0–4: fajr, sunrise, asr, sunset/maghrib, isha).
 
-3. **Packed diagnostics** — `cf` field: bit 0 = clamped, bit 1 = interval, bit 2 = middle_of_night, bit 3 = seventh_of_night, bit 4 = twilight_angle.
+3. **Packed diagnostics** — `_compactFlags` field in V: bit 0 = clamped, bit 1 = interval, bit 2 = middle_of_night, bit 3 = seventh_of_night, bit 4 = twilight_angle.
 
-4. **V class (4 own props, kind on prototype)** — `_m` (epoch ms), `_co` (cosOmega), `_cf` (packed flags), `_ta` (targetAlt). `kind = "valid"` on prototype. `get utc()` returns `new Date(this._m)` each call (no Date cache). Staying at ≤6 own properties avoids JSC butterfly storage.
+4. **V class (4 own props, kind on prototype)** — `ms` (epoch ms, public), `_cosOmega`, `_compactFlags` (packed flags), `_targetAltitude`. `kind = "valid"` on prototype. `ms` is a plain data property (no getter). Staying at ≤6 own properties avoids JSC butterfly storage.
 
 5. **Lazy derived times** — midnight, imsak, firstThird, lastThird are PTR getters computed from prayer V objects on access.
 
 6. **Trig lookup tables** — ~65KB pre-computed sin/cos/acos tables with linear interpolation, avoiding `Math.sin`/`Math.cos` on the hot path (~2.9ns per lookup vs ~3.4ns for native).
 
-7. **Inlined corrected hour angles** — Pre-computed interpolation coefficients (raA/B/C, declA/B/C) shared across transit + 5 CHA calls. Pre-computed sinLatSinD/cosLatCosD shared across 5 cosH0 computations. Shared cosH0/H0 between sunrise and sunset (same horizon altitude).
+7. **Inlined corrected hour angles** — Pre-computed interpolation coefficients (`rightAscensionInterpolationSum/Diff`, `declinationInterpolationSum/Diff`) shared across transit + 5 CHA calls. Pre-computed `sinLatTimesSinDeclination`/`cosLatTimesCosDeclination` shared across 5 `cosHourAngle` computations. Shared `cosHourAngleHorizon`/`hourAngleHorizonDeg` between sunrise and sunset (same horizon altitude).
 
 8. **Array-based solar cache** — `Float64Array(512)` keys with bitmasked JD index `((jd+0.5)|0) & 511`.
 
@@ -410,7 +413,7 @@ The engine computes 7,300 prayer times (20 locations × 365 days) in **~900µs**
 
 10. **Cached Intl.DateTimeFormat** — `formatLocal()` caches formatter objects per (timezone, hour12) pair. 133–174x faster than creating a new formatter per call.
 
-11. **Lazy sunnah times** — `ST` class with 2 numeric own properties; Date objects created on getter access.
+11. **Sunnah times** — `computeSunnahTimes(sunsetMs, nextDayFajrMs)` returns plain epoch ms `{ middleOfTheNight, lastThirdOfTheNight }`. No class or lazy getters — two direct arithmetic results.
 
 12. **PrayerContext** — `createPrayerContext()` stores a single reusable input object. Only the `date` field is mutated per call. The module-level config cache always hits (same field values), so branch predictor eliminates its cost after warmup.
 
@@ -428,8 +431,9 @@ The engine computes 7,300 prayer times (20 locations × 365 days) in **~900µs**
 ### Test suite
 
 - **410 unit tests** across 17 test files, 100% function and line coverage
-- **12,100 E2E tests** comparing against pre-fetched Aladhan API responses (no network)
-- **55,170+ total assertions**
+- **~24,200 E2E tests** comparing against pre-fetched Aladhan API responses (no network)
+- **184 dist-sanity tests** validating the built `dist/index.js` ESM/CJS artifact
+- **648,389+ total assertions** across all suites (24,794 total tests)
 
 ### Unit test files
 
@@ -441,7 +445,7 @@ The engine computes 7,300 prayer times (20 locations × 365 days) in **~900µs**
 | `astronomical.test.ts`    | Nutation, sidereal time, extracted astronomical functions                                                                                                                               |
 | `hour-angle.test.ts`      | Hour angle computation, interpolation, correctedHourAngleFast                                                                                                                           |
 | `math.test.ts`            | Interpolation edge cases, normalizeToScale, quadrantShiftAngle                                                                                                                          |
-| `prayers.test.ts`         | Main engine, PTR class, meta.solarNoonUtc, all prayer outputs, sunset vs maghrib with adjustments                                                                                       |
+| `prayers.test.ts`         | Main engine, PTR class, meta.solarNoonMs, all prayer outputs, sunset vs maghrib with adjustments                                                                                        |
 | `prayers-context.test.ts` | PrayerContext API parity: verifies `createPrayerContext().compute()` matches `computePrayerTimes()` exactly for 20 locations × 365 days (timesMs, meta, diagnostics)                    |
 | `accuracy.test.ts`        | Accuracy budget: ensures all optimizations stay within 1 second of the pre-optimization baseline                                                                                        |
 | `high-latitude.test.ts`   | All fallback strategies                                                                                                                                                                 |
@@ -455,16 +459,18 @@ The engine computes 7,300 prayer times (20 locations × 365 days) in **~900µs**
 
 ### E2E testing
 
-E2E tests compare our engine against **12,100 pre-fetched Aladhan API responses** stored as static JSON fixtures. No network calls during testing. Fixtures are fetched via `bun run fetch-fixtures` and cover 7 locations × 13 methods × ~365 days.
+E2E tests compare our engine against pre-fetched Aladhan API responses stored as static JSON fixtures. No network calls during testing. Fixtures are fetched via `bun run fetch-fixtures` and cover 7 locations × 13 methods × ~266 days (~24,200 individual test cases).
 
 ### Running tests
 
 ```sh
 bun run test           # Unit tests only
 bun run test:e2e       # E2E tests
-bun run test:all       # Everything
-bun run test:coverage  # Unit tests with coverage report
-bunx tsc --noEmit      # Type check
+bun run test:dist      # Dist-sanity tests (requires bun run build first)
+bun run test:all       # Everything (unit + E2E + dist-sanity)
+bun run test:coverage  # All tests with coverage report (dist/index.js excluded via bunfig.toml)
+bunx tsc --noEmit      # Type check (src only)
+bunx tsc --noEmit -p tsconfig.dist-sanity.json  # Type check dist declarations
 ```
 
 ---
@@ -500,13 +506,19 @@ masjiduna-waqt/
 │   ├── high-latitude.ts      # Fallback strategies with side-aware anchoring
 │   ├── format.ts             # Cached Intl.DateTimeFormat → local HH:MM
 │   ├── qibla.ts              # Great-circle bearing to Kaaba
-│   ├── sunnah.ts             # Night-division (lazy ST class)
+│   ├── sunnah.ts             # Night-division returning plain epoch ms
 │   ├── prayer-utils.ts       # timeForPrayer, currentPrayer, nextPrayer
 │   ├── date-utils.ts         # dayOfYear, isLeapYear, roundedMinute, daysSinceSolstice
 │   └── moonsighting.ts       # MoonsightingCommittee seasonal twilight (3 Shafaq variants)
+├── dist/                     # Built artifacts (gitignored, published to npm)
+│   ├── index.js              # ESM output
+│   ├── index.cjs             # CJS output
+│   ├── index.d.ts            # Type declarations (ESM)
+│   └── index.d.cts           # Type declarations (CJS)
 ├── tests/
 │   ├── unit/                 # 17 test files, 410 tests
-│   ├── e2e/                  # 12,100 Aladhan API comparison tests
+│   ├── e2e/                  # ~24,200 Aladhan API comparison tests
+│   ├── dist-sanity/          # 184 tests against built dist/index.js
 │   ├── fixtures/
 │   │   └── aladhan.json      # Static Aladhan API responses
 │   └── helpers.ts            # Shared test utilities
@@ -517,8 +529,13 @@ masjiduna-waqt/
 │   └── prayer-times.ts       # mitata v1 benchmarks (3 variants)
 ├── docs/
 │   └── calculation_plan.md   # This document
-├── package.json              # Zero prod dependencies
-└── tsconfig.json
+├── package.json              # Zero prod dependencies, AGPL-3.0, version 1.0.0
+├── tsconfig.json
+├── tsconfig.build.json       # tsup dts generation (emitDeclarationOnly)
+├── tsconfig.dist-sanity.json # Isolated type check for dist declarations
+├── tsup.config.ts            # ESM + CJS + dts build config
+├── bunfig.toml               # coverageSkipTestFiles, coveragePathIgnorePatterns=["**/*.js"]
+└── .npmignore                # Defense-in-depth (files: ["dist"] is the primary guard)
 ```
 
-Zero production dependencies. Dev dependencies: `@types/bun`, `mitata@^1.0.34` (for benchmarks), `oxfmt@^0.35.0` (for formatting). Peer dependency: `typescript@^5`.
+Zero production dependencies. Dev dependencies: `@types/bun`, `mitata@^1.0.34` (for benchmarks), `oxfmt@^0.35.0` (for formatting), `tsup@^8.5.1` (for building). Peer dependency: `typescript@^5`. Published to npm as `masjiduna-waqt@1.0.0` under AGPL-3.0.
