@@ -30,11 +30,5 @@ jobs:
       - name: Typecheck (dist declarations)
         run: bunx tsc --noEmit -p tsconfig.dist-sanity.json
 
-      - name: Unit tests + coverage
-        run: bun test --coverage tests/unit/
-
-      - name: E2E tests
-        run: bun test tests/e2e/
-
-      - name: Dist sanity tests
-        run: bun test tests/dist-sanity/
+      - name: Test + coverage
+        run: bun run test:coverage
