@@ -1,6 +1,6 @@
 {
   "name": "masjiduna-waqt",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Pure TypeScript prayer time calculation library. Zero runtime dependencies. Sunni-only Meeus-based solar algorithms.",
   "license": "AGPL-3.0",
   "bin": {
