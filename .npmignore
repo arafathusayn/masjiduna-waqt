@@ -1,0 +1,14 @@
+src/
+tests/
+benchmarks/
+scripts/
+docs/
+node_modules/
+bun.lock
+tsconfig.json
+tsconfig.build.json
+tsconfig.dist-sanity.json
+tsup.config.ts
+.oxfmtrc.json
+CLAUDE.md
+test-results/

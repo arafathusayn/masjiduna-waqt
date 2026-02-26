@@ -88,18 +88,8 @@ describe("Sunnah times", () => {
 
   test("London — MWL, Dec 2015", () => {
     // Expected: middle=22:49, lastThird=01:07
-    const today = makeTimes(
-      51.5074,
-      -0.1278,
-      Date.UTC(2015, 11, 1),
-      "MWL",
-    );
-    const tomorrow = makeTimes(
-      51.5074,
-      -0.1278,
-      Date.UTC(2015, 11, 2),
-      "MWL",
-    );
+    const today = makeTimes(51.5074, -0.1278, Date.UTC(2015, 11, 1), "MWL");
+    const tomorrow = makeTimes(51.5074, -0.1278, Date.UTC(2015, 11, 2), "MWL");
     if (today.maghrib.kind !== "valid" || tomorrow.fajr.kind !== "valid")
       throw new Error("Prayers undefined");
 
@@ -113,18 +103,8 @@ describe("Sunnah times", () => {
 
   test("Oslo — MWL, Jan 2016", () => {
     // Expected: middle=22:59, lastThird=01:31
-    const today = makeTimes(
-      59.9094,
-      10.7349,
-      Date.UTC(2016, 0, 1),
-      "MWL",
-    );
-    const tomorrow = makeTimes(
-      59.9094,
-      10.7349,
-      Date.UTC(2016, 0, 2),
-      "MWL",
-    );
+    const today = makeTimes(59.9094, 10.7349, Date.UTC(2016, 0, 1), "MWL");
+    const tomorrow = makeTimes(59.9094, 10.7349, Date.UTC(2016, 0, 2), "MWL");
     if (today.maghrib.kind !== "valid" || tomorrow.fajr.kind !== "valid")
       throw new Error("Prayers undefined");
 

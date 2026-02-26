@@ -38,10 +38,7 @@ const LOCATIONS = [
 ] as const;
 
 const YEAR = 2025;
-const DATES = Array.from(
-  { length: 365 },
-  (_, d) => Date.UTC(YEAR, 0, 1 + d),
-);
+const DATES = Array.from({ length: 365 }, (_, d) => Date.UTC(YEAR, 0, 1 + d));
 
 const PRAYER_KEYS = [
   "fajr",

@@ -166,13 +166,13 @@ Same defaults as `computePrayerTimes`. The `timezoneId` defaults to `"UTC"`.
 
 ### Required
 
-| Parameter    | Type   | Example                           |
-| ------------ | ------ | --------------------------------- |
-| `latitude`   | number | `22.3569` (-90 to 90)             |
-| `longitude`  | number | `91.7832` (-180 to 180)           |
-| `date`       | number | `Date.UTC(2026, 1, 28)`           |
-| `timezoneId` | string | `"Asia/Dhaka"`                    |
-| `method`     | object | `MethodProfile.Karachi`           |
+| Parameter    | Type   | Example                 |
+| ------------ | ------ | ----------------------- |
+| `latitude`   | number | `22.3569` (-90 to 90)   |
+| `longitude`  | number | `91.7832` (-180 to 180) |
+| `date`       | number | `Date.UTC(2026, 1, 28)` |
+| `timezoneId` | string | `"Asia/Dhaka"`          |
+| `method`     | object | `MethodProfile.Karachi` |
 
 ### Optional
 

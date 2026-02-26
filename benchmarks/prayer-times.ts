@@ -45,9 +45,8 @@ const LOCATIONS = [
 
 // Pre-generate dates for a full year
 const YEAR = 2025;
-const DATES_UTC = Array.from(
-  { length: 365 },
-  (_, d) => Date.UTC(YEAR, 0, 1 + d),
+const DATES_UTC = Array.from({ length: 365 }, (_, d) =>
+  Date.UTC(YEAR, 0, 1 + d),
 );
 
 // ============================================================

@@ -51,12 +51,7 @@ const eq = (actual: unknown, expected: string) =>
   expect(String(actual)).toBe(expected);
 
 describe("timeForPrayer", () => {
-  const times = makeTimes(
-    33.7294,
-    73.0931,
-    Date.UTC(2015, 8, 1),
-    "Karachi",
-  );
+  const times = makeTimes(33.7294, 73.0931, Date.UTC(2015, 8, 1), "Karachi");
 
   test("returns number for each prayer", () => {
     const prayers = [
@@ -79,12 +74,7 @@ describe("timeForPrayer", () => {
 });
 
 describe("currentPrayer", () => {
-  const times = makeTimes(
-    33.7294,
-    73.0931,
-    Date.UTC(2015, 8, 1),
-    "Karachi",
-  );
+  const times = makeTimes(33.7294, 73.0931, Date.UTC(2015, 8, 1), "Karachi");
 
   test("before fajr → none", () => {
     const fajr = timeForPrayer(times, "fajr" as Prayer)!;
@@ -124,12 +114,7 @@ describe("currentPrayer", () => {
 });
 
 describe("nextPrayer", () => {
-  const times = makeTimes(
-    33.7294,
-    73.0931,
-    Date.UTC(2015, 8, 1),
-    "Karachi",
-  );
+  const times = makeTimes(33.7294, 73.0931, Date.UTC(2015, 8, 1), "Karachi");
 
   test("before fajr → fajr", () => {
     const fajr = timeForPrayer(times, "fajr" as Prayer)!;

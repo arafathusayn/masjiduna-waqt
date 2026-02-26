@@ -135,9 +135,7 @@ describe("Chittagong — MWL Hanafi, Feb 25 2026", () => {
   test("midnight falls after Isha", () => {
     assertValid(result.midnight);
     assertValid(result.isha);
-    expect(result.midnight.ms).toBeGreaterThan(
-      result.isha.ms,
-    );
+    expect(result.midnight.ms).toBeGreaterThan(result.isha.ms);
   });
 
   test("Imsak is exactly 10 minutes before Fajr", () => {
@@ -170,15 +168,9 @@ describe("Chittagong — MWL Hanafi, Feb 25 2026", () => {
     const adj = (ms: number) => (ms < maghribMs ? ms + 86_400_000 : ms);
 
     expect(adj(result.firstThird.ms)).toBeGreaterThan(maghribMs);
-    expect(adj(result.midnight.ms)).toBeGreaterThan(
-      adj(result.firstThird.ms),
-    );
-    expect(adj(result.lastThird.ms)).toBeGreaterThan(
-      adj(result.midnight.ms),
-    );
-    expect(adj(result.fajr.ms)).toBeGreaterThan(
-      adj(result.lastThird.ms),
-    );
+    expect(adj(result.midnight.ms)).toBeGreaterThan(adj(result.firstThird.ms));
+    expect(adj(result.lastThird.ms)).toBeGreaterThan(adj(result.midnight.ms));
+    expect(adj(result.fajr.ms)).toBeGreaterThan(adj(result.lastThird.ms));
   });
 
   test("solar position metadata is reasonable", () => {
@@ -193,9 +185,7 @@ describe("Chittagong — MWL Hanafi, Feb 25 2026", () => {
     expect(typeof noonMs).toBe("number");
     // solarNoon should be within a few minutes of dhuhr
     if (result.dhuhr.kind === "valid") {
-      expect(
-        Math.abs(noonMs - result.dhuhr.ms),
-      ).toBeLessThan(10 * 60_000);
+      expect(Math.abs(noonMs - result.dhuhr.ms)).toBeLessThan(10 * 60_000);
     }
     // calling it twice should return the same value
     expect(result.meta.solarNoonMs).toBe(noonMs);
@@ -229,8 +219,7 @@ describe("Chittagong — Karachi Hanafi, Feb 25 2026", () => {
     const mwlResult = computePrayerTimes(CHITTAGONG);
     assertValid(result.isha);
     assertValid(mwlResult.isha);
-    const diffMinutes =
-      (result.isha.ms - mwlResult.isha.ms) / 60_000;
+    const diffMinutes = (result.isha.ms - mwlResult.isha.ms) / 60_000;
     expect(diffMinutes).toBeGreaterThan(3);
     expect(diffMinutes).toBeLessThan(25);
   });
@@ -239,9 +228,7 @@ describe("Chittagong — Karachi Hanafi, Feb 25 2026", () => {
     const mwlResult = computePrayerTimes(CHITTAGONG);
     assertValid(result.fajr);
     assertValid(mwlResult.fajr);
-    expect(
-      Math.abs(result.fajr.ms - mwlResult.fajr.ms),
-    ).toBe(0);
+    expect(Math.abs(result.fajr.ms - mwlResult.fajr.ms)).toBe(0);
   });
 });
 
@@ -568,15 +555,9 @@ describe("Cairo — MWL Shafi, Jun 21 2022", () => {
     const adj = (ms: number) => (ms < maghribMs ? ms + 86_400_000 : ms);
 
     expect(adj(result.firstThird.ms)).toBeGreaterThan(maghribMs);
-    expect(adj(result.midnight.ms)).toBeGreaterThan(
-      adj(result.firstThird.ms),
-    );
-    expect(adj(result.lastThird.ms)).toBeGreaterThan(
-      adj(result.midnight.ms),
-    );
-    expect(adj(result.fajr.ms)).toBeGreaterThan(
-      adj(result.lastThird.ms),
-    );
+    expect(adj(result.midnight.ms)).toBeGreaterThan(adj(result.firstThird.ms));
+    expect(adj(result.lastThird.ms)).toBeGreaterThan(adj(result.midnight.ms));
+    expect(adj(result.fajr.ms)).toBeGreaterThan(adj(result.lastThird.ms));
   });
 });
 
@@ -633,15 +614,9 @@ describe("Sydney — Karachi Hanafi, Dec 21 2026", () => {
     const adj = (ms: number) => (ms < maghribMs ? ms + 86_400_000 : ms);
 
     expect(adj(result.firstThird.ms)).toBeGreaterThan(maghribMs);
-    expect(adj(result.midnight.ms)).toBeGreaterThan(
-      adj(result.firstThird.ms),
-    );
-    expect(adj(result.lastThird.ms)).toBeGreaterThan(
-      adj(result.midnight.ms),
-    );
-    expect(adj(result.fajr.ms)).toBeGreaterThan(
-      adj(result.lastThird.ms),
-    );
+    expect(adj(result.midnight.ms)).toBeGreaterThan(adj(result.firstThird.ms));
+    expect(adj(result.lastThird.ms)).toBeGreaterThan(adj(result.midnight.ms));
+    expect(adj(result.fajr.ms)).toBeGreaterThan(adj(result.lastThird.ms));
   });
 });
 
@@ -712,15 +687,9 @@ describe("Jakarta — Singapore Shafi, Dec 25 2023", () => {
     const adj = (ms: number) => (ms < maghribMs ? ms + 86_400_000 : ms);
 
     expect(adj(result.firstThird.ms)).toBeGreaterThan(maghribMs);
-    expect(adj(result.midnight.ms)).toBeGreaterThan(
-      adj(result.firstThird.ms),
-    );
-    expect(adj(result.lastThird.ms)).toBeGreaterThan(
-      adj(result.midnight.ms),
-    );
-    expect(adj(result.fajr.ms)).toBeGreaterThan(
-      adj(result.lastThird.ms),
-    );
+    expect(adj(result.midnight.ms)).toBeGreaterThan(adj(result.firstThird.ms));
+    expect(adj(result.lastThird.ms)).toBeGreaterThan(adj(result.midnight.ms));
+    expect(adj(result.fajr.ms)).toBeGreaterThan(adj(result.lastThird.ms));
   });
 });
 
@@ -805,13 +774,9 @@ describe("Sunset vs Maghrib with adjustment", () => {
     // Sunset unchanged
     expect(withAdj.sunset.ms).toBe(noAdj.sunset.ms);
     // Maghrib shifted by 3 minutes
-    expect(withAdj.maghrib.ms - noAdj.maghrib.ms).toBe(
-      3 * 60_000,
-    );
+    expect(withAdj.maghrib.ms - noAdj.maghrib.ms).toBe(3 * 60_000);
     // Maghrib = sunset + 3 min
-    expect(withAdj.maghrib.ms - withAdj.sunset.ms).toBe(
-      3 * 60_000,
-    );
+    expect(withAdj.maghrib.ms - withAdj.sunset.ms).toBe(3 * 60_000);
   });
 });
 
@@ -831,9 +796,7 @@ describe("Hanafi vs Standard Asr difference", () => {
     });
     assertValid(hanafiResult.asr);
     assertValid(standardResult.asr);
-    const diff =
-      (hanafiResult.asr.ms - standardResult.asr.ms) /
-      60_000;
+    const diff = (hanafiResult.asr.ms - standardResult.asr.ms) / 60_000;
     expect(diff).toBeGreaterThanOrEqual(30);
     expect(diff).toBeLessThanOrEqual(90);
   });
@@ -852,9 +815,7 @@ describe("Dhuhr adjustment", () => {
     });
     assertValid(noAdj.dhuhr);
     assertValid(withAdj.dhuhr);
-    expect(withAdj.dhuhr.ms - noAdj.dhuhr.ms).toBe(
-      60_000,
-    );
+    expect(withAdj.dhuhr.ms - noAdj.dhuhr.ms).toBe(60_000);
   });
 });
 
@@ -876,11 +837,7 @@ describe("elevation adjusts sunrise/sunset", () => {
     assertValid(elevated.sunrise);
     assertValid(seaLevel.sunset);
     assertValid(elevated.sunset);
-    expect(elevated.sunrise.ms).toBeLessThan(
-      seaLevel.sunrise.ms,
-    );
-    expect(elevated.sunset.ms).toBeGreaterThan(
-      seaLevel.sunset.ms,
-    );
+    expect(elevated.sunrise.ms).toBeLessThan(seaLevel.sunrise.ms);
+    expect(elevated.sunset.ms).toBeGreaterThan(seaLevel.sunset.ms);
   });
 });

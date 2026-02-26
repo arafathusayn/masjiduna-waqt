@@ -1,13 +1,38 @@
 {
   "name": "masjiduna-waqt",
+  "version": "1.0.0",
+  "description": "Pure TypeScript prayer time calculation library. Zero runtime dependencies. Sunni-only Meeus-based solar algorithms.",
+  "license": "AGPL-3.0",
+  "files": [
+    "dist"
+  ],
   "type": "module",
-  "module": "src/index.ts",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
   "scripts": {
+    "build": "tsup",
+    "prepublishOnly": "bun run build",
     "test": "bun test tests/unit/",
     "test:e2e": "bun test tests/e2e/",
     "test:all": "bun test",
     "test:coverage": "bun test --coverage tests/unit/",
+    "test:dist": "bun test tests/dist-sanity/",
     "typecheck": "bunx tsc --noEmit",
+    "typecheck:dist": "bunx tsc --noEmit -p tsconfig.dist-sanity.json",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check ."
   },
@@ -15,7 +40,8 @@
   "devDependencies": {
     "@types/bun": "latest",
     "mitata": "^1.0.34",
-    "oxfmt": "^0.35.0"
+    "oxfmt": "^0.35.0",
+    "tsup": "^8.5.1"
   },
   "peerDependencies": {
     "typescript": "^5"
