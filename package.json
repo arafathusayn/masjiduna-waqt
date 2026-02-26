@@ -29,7 +29,7 @@
     "test": "bun test tests/unit/",
     "test:e2e": "bun test tests/e2e/",
     "test:all": "bun test tests/unit/ tests/e2e/ tests/dist-sanity/",
-    "test:coverage": "bun test --coverage tests/unit/ && bun test tests/e2e/ tests/dist-sanity/",
+    "test:coverage": "bun test --coverage",
     "test:dist": "bun test tests/dist-sanity/",
     "typecheck": "bunx tsc --noEmit",
     "typecheck:dist": "bunx tsc --noEmit -p tsconfig.dist-sanity.json",
