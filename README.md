@@ -4,6 +4,11 @@
     A well-tested JS/TS Library for prayer times using optimized solar algorithms.
     <br /><br />
     <small>Zero dependencies</small> · <small>Less than 1 ms for 7K ops 🔥</small>
+    <br /><br />
+    <a href="https://github.com/arafathusayn/masjiduna-waqt/actions/workflows/ci.yml">
+      <img src="https://github.com/arafathusayn/masjiduna-waqt/actions/workflows/ci.yml/badge.svg" alt="CI" />
+    </a>
+    <img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage 100%" />
   </p>
 </p>
 
