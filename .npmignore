@@ -1,6 +1,15 @@
 src/
 bin/
 tests/
+
+# Native binaries — distributed via GitHub Releases, not npm
+dist/waqt-darwin-arm64
+dist/waqt-darwin-x64
+dist/waqt-linux-x64
+dist/waqt-linux-arm64
+dist/waqt-windows-x64.exe
+dist/waqt.mjs
+dist/waqt
 benchmarks/
 scripts/
 docs/

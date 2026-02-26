@@ -1,7 +1,10 @@
 #!/usr/bin/env bun
 /**
  * Cross-compile waqt CLI for all supported platforms.
- * Output: dist/waqt-<platform>-<arch>[.exe]  +  dist/waqt.mjs (Node ESM launcher)
+ * Outputs:
+ *   dist/waqt-<platform>-<arch>[.exe]  — standalone Bun native binaries (GitHub Releases)
+ *   dist/waqt.js                       — Node ESM launcher (npm bin, calls native binary)
+ *   dist/preinstall.js                 — preinstall downloader (runs on npm install -g)
  */
 
 const TARGETS: Array<{ flag: string; outfile: string }> = [
@@ -17,7 +20,7 @@ for (const { flag, outfile } of TARGETS) {
   await Bun.$`bun build bin/waqt.ts --compile --bytecode --minify --target ${flag} --outfile dist/${outfile}`.quiet();
 }
 
-// Build the launcher as Node ESM, prepend shebang, write to dist/waqt
+// Build the Node ESM launcher — prepend shebang, write to dist/waqt.js
 process.stdout.write("  building launcher...\n");
 const launcherBuild = await Bun.build({
   entrypoints: ["bin/launcher.ts"],
@@ -30,7 +33,22 @@ if (!launcherBuild.success) {
   process.exit(1);
 }
 const launcherCode = await launcherBuild.outputs[0]!.text();
-await Bun.write("dist/waqt", `#!/usr/bin/env node\n${launcherCode}`);
-await Bun.$`chmod +x dist/waqt`;
+await Bun.write("dist/waqt.js", `#!/usr/bin/env node\n${launcherCode}`);
+await Bun.$`chmod +x dist/waqt.js`;
+
+// Build the preinstall downloader
+process.stdout.write("  building preinstall...\n");
+const preinstallBuild = await Bun.build({
+  entrypoints: ["bin/preinstall.ts"],
+  target: "node",
+  format: "esm",
+  minify: true,
+});
+if (!preinstallBuild.success) {
+  for (const msg of preinstallBuild.logs) console.error(msg);
+  process.exit(1);
+}
+const preinstallCode = await preinstallBuild.outputs[0]!.text();
+await Bun.write("dist/preinstall.js", preinstallCode);
 
 process.stdout.write("  done\n");

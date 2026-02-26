@@ -1,4 +1,6 @@
 import { spawnSync } from "child_process";
+import { existsSync } from "fs";
+import { homedir } from "os";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -22,8 +24,23 @@ if (!binaryName) {
   process.exit(1);
 }
 
-const dir = dirname(fileURLToPath(import.meta.url));
-const binaryPath = join(dir, binaryName);
+// 1. ~/.waqt/bin/<binary>  — downloaded by postinstall (npm install -g)
+// 2. same dir as this script — standalone binary distribution (GitHub Releases)
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const candidates = [
+  join(homedir(), ".waqt", "bin", binaryName),
+  join(scriptDir, binaryName),
+];
+
+const binaryPath = candidates.find(existsSync);
+if (!binaryPath) {
+  process.stderr.write(
+    `waqt: native binary not found.\n` +
+      `  Reinstall:  npm install -g masjiduna-waqt\n` +
+      `  Or download from: https://github.com/arafathusayn/masjiduna-waqt/releases\n`,
+  );
+  process.exit(1);
+}
 
 const result = spawnSync(binaryPath, process.argv.slice(2), {
   stdio: "inherit",

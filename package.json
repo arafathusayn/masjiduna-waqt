@@ -4,10 +4,15 @@
   "description": "Pure TypeScript prayer time calculation library. Zero runtime dependencies. Sunni-only Meeus-based solar algorithms.",
   "license": "AGPL-3.0",
   "bin": {
-    "waqt": "./dist/waqt"
+    "waqt": "./dist/waqt.js"
   },
   "files": [
-    "dist"
+    "dist/index.js",
+    "dist/index.cjs",
+    "dist/index.d.ts",
+    "dist/index.d.cts",
+    "dist/waqt.js",
+    "dist/preinstall.js"
   ],
   "type": "module",
   "sideEffects": false,
@@ -27,6 +32,7 @@
     }
   },
   "scripts": {
+    "preinstall": "node dist/preinstall.js",
     "build:bin": "bun scripts/build-bin.ts",
     "build": "tsup && bun run build:bin",
     "prepublishOnly": "bun run build",
