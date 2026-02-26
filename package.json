@@ -32,7 +32,7 @@
     }
   },
   "scripts": {
-    "preinstall": "node dist/preinstall.js",
+    "preinstall": "node -e \"const fs=require('fs'),cp=require('child_process');fs.existsSync('dist/preinstall.js')&&cp.spawnSync('node',['dist/preinstall.js'],{stdio:'inherit'})\"",
     "build:bin": "bun scripts/build-bin.ts",
     "build": "tsup && bun run build:bin",
     "prepublishOnly": "bun run build",
