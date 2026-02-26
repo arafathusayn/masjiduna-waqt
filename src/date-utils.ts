@@ -1,9 +1,5 @@
 import type { Rounding } from "./schema.ts";
 
-// ============================================================
-// Date utilities — pure functions, no branded types internally.
-// ============================================================
-
 /** Whether a Gregorian year is a leap year. */
 export function isLeapYear(year: number): boolean {
   if (year % 4 !== 0) return false;
@@ -61,10 +57,7 @@ export function roundedMinute(
   return dateByAddingSeconds(date, offset);
 }
 
-/**
- * Decompose decimal hours into hours, minutes, seconds.
- * Decomposes decimal hours into integer hours, minutes, seconds.
- */
+/** Decompose decimal hours into integer hours, minutes, seconds. */
 export function decomposeHours(num: number): {
   hours: number;
   minutes: number;
@@ -78,10 +71,9 @@ export function decomposeHours(num: number): {
 
 /**
  * Number of days since the winter solstice.
- * Used by MoonsightingCommittee seasonal twilight calculations.
  *
- * Northern hemisphere: offset by +10 days (solstice ~Dec 21)
- * Southern hemisphere: offset by −172 or −173 days (solstice ~Jun 21)
+ * Northern hemisphere: +10 days offset (solstice ~Dec 21).
+ * Southern hemisphere: −172/−173 days offset (solstice ~Jun 21).
  */
 export function daysSinceSolstice(
   doy: number,

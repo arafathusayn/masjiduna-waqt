@@ -1,9 +1,5 @@
 import { sinDeg, cosDeg, normalizeDeg, atan2Deg } from "./units.ts";
 
-// ============================================================
-// Solar position — all plain `number`, no branded types.
-// ============================================================
-
 export interface SolarPosition {
   /** Sun's declination (degrees) */
   readonly declination: number;
@@ -44,10 +40,6 @@ export function toJulianDate(year: number, month: number, day: number): number {
 export function toJulianCentury(julianDate: number): number {
   return (julianDate - 2451545.0) / 36525.0;
 }
-
-// ============================================================
-// Nutation & sidereal time — Meeus Chapter 22 / p.144 / p.88
-// ============================================================
 
 /** Mean lunar longitude (Meeus p.144). */
 export function meanLunarLongitude(T: number): number {
@@ -102,11 +94,6 @@ export function meanSiderealTime(T: number): number {
   );
 }
 
-// ============================================================
-// Individual astronomical functions — Meeus Chapter 12–15
-// Extracted from solarPosition() for independent testability.
-// ============================================================
-
 /** Geometric mean longitude of the sun (degrees) — Meeus p.163. */
 export function meanSolarLongitude(T: number): number {
   return normalizeDeg(280.4664567 + 36000.76983 * T + 0.0003032 * T * T);
@@ -156,10 +143,6 @@ export function apparentObliquityOfTheEcliptic(
   const O = 125.04 - 1934.136 * T;
   return eps0 + 0.00256 * cosDeg(O);
 }
-
-// ============================================================
-// Full Meeus solar position
-// ============================================================
 
 /** Full Meeus algorithm — returns declination, RA, sidereal time, etc. */
 export function solarPosition(julianDate: number): SolarPosition {

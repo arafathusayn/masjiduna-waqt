@@ -1,10 +1,5 @@
 import { sinDeg, cosDeg, normalizeDeg } from "./units.ts";
 
-// ============================================================
-// Hour angle — the single most important equation in prayer
-// time calculation. All parameters are plain numbers (degrees).
-// ============================================================
-
 /** Discriminated union: either a valid hour angle or an undefined marker. */
 export type HourAngleResult =
   | {
@@ -53,11 +48,6 @@ export function computeHourAngle(
 export function hourAngleToHours(omegaDeg: number): number {
   return omegaDeg / 15;
 }
-
-// ============================================================
-// Meeus Chapter 15 — corrected transit and hour angles using
-// 3-day interpolation of right ascension and declination.
-// ============================================================
 
 /** Normalize a number to [0, max). */
 export function normalizeToScale(num: number, max: number): number {

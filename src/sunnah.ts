@@ -1,7 +1,3 @@
-// ============================================================
-// Sunnah times — night-division calculation.
-// ============================================================
-
 export interface SunnahTimesResult {
   readonly middleOfTheNight: number;
   readonly lastThirdOfTheNight: number;

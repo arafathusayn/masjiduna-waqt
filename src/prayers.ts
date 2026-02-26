@@ -2,12 +2,6 @@ import { solarPosition, type SolarPosition } from "./solar.ts";
 import { normalizeDeg } from "./units.ts";
 import { NO_ADJUSTMENTS } from "./config.ts";
 
-// ============================================================
-// Plain input interface — no ArkType dependency on the hot path.
-// Branded types from schema.ts are assignable to these plain types,
-// so existing callers continue to work with zero changes.
-// ============================================================
-
 export interface MethodInput {
   readonly fajr: number; // degrees
   readonly isha: number; // degrees
@@ -88,10 +82,6 @@ function _resolve(config: PrayerTimeInput): ResolvedInput {
   };
 }
 
-// ============================================================
-// Output types — plain `number` for all numeric fields.
-// ============================================================
-
 export interface PrayerDiagnostics {
   /** Raw cos(omega) before clamping (null for Dhuhr/midnight) */
   readonly cosOmega: number | null;
@@ -139,10 +129,6 @@ export interface PrayerTimesOutput {
   };
 }
 
-// ============================================================
-// Solar position cache
-// ============================================================
-
 const CACHE_MASK = 511;
 const _cacheJDs = new Float64Array(512);
 const _cacheVals: (SolarPosition | undefined)[] = new Array(512);
@@ -155,10 +141,6 @@ function cachedSolarPosition(jd: number): SolarPosition {
   _cacheVals[idx] = sp;
   return sp;
 }
-
-// ============================================================
-// DayConstants cache — Float64Array stride-16 interleaving.
-// ============================================================
 
 const DC_STRIDE = 16;
 const _dcJDs = new Float64Array(512);
@@ -184,10 +166,6 @@ export function clearSolarCache(): void {
   _slabOff = 0; // reset slab ring buffer
 }
 
-// ============================================================
-// Internal constants
-// ============================================================
-
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
 const EPSILON = 1e-6;
@@ -196,10 +174,6 @@ const POS_COS_BOUND = 1 + EPSILON;
 const INV360 = 1 / 360;
 const MS_PER_DAY = 86_400_000;
 const MS_PER_MIN = 60_000;
-
-// ============================================================
-// Trig lookup tables — degree-indexed sin + value-indexed acos + atan.
-// ============================================================
 
 const _S_SCALE = 5;
 const _S_OFF = 540;
@@ -253,12 +227,6 @@ function tAtan(x: number): number {
   return _AT[i]! + (idx - i) * (_AT[i + 1]! - _AT[i]!);
 }
 
-// ============================================================
-// Slab allocator — ring buffer of Float64 slots.
-// 16,384 slots × 29 doubles = 3.8 MB, fits in L2/L3.
-// Eliminates per-call Float64Array allocation (was 63% of engine time).
-// ============================================================
-
 const _SLAB_SLOTS = 16384;
 const _SLAB_LEN = 29 * _SLAB_SLOTS;
 const _SLAB = new Float64Array(_SLAB_LEN);
@@ -284,11 +252,6 @@ const UNDEF_FAJR: PrayerTimeResult = {
   reason: "fajr is undefined",
   diagnostics: DERIVED_DIAG,
 };
-
-// ============================================================
-// Lightweight valid result — Date + diagnostics deferred.
-// _cf packs clamped (bit 0) + fallback type (bits 1-4).
-// ============================================================
 
 class V {
   declare kind: "valid";
@@ -441,11 +404,6 @@ class PTR implements PrayerTimesOutput {
   }
 }
 
-// ============================================================
-// Config cache — reuses location/method/adjustment computations
-// across calls with the same parameters (different dates).
-// ============================================================
-
 let _ccLat = NaN;
 let _ccLng = NaN;
 let _ccElev = NaN;
@@ -481,11 +439,6 @@ let _adjAsrMs = 0;
 let _adjMaghribMs = 0;
 let _adjIshaMs = 0;
 let _shadowK = 1;
-
-// ============================================================
-// Core computation kernel — writes to slab S at offset o.
-// Returns uf bitmask (bit 0=fajr, 1=sunrise, 2=asr, 3=sunset/maghrib, 4=isha).
-// ============================================================
 
 function _computeCore(
   config: ResolvedInput,
@@ -634,14 +587,6 @@ function _computeCore(
   const asrAlt = tAtan(1 / (shadowK + tSin(_asrDiff) / tCos(_asrDiff)));
   const sinAsrAlt = tSin(asrAlt);
   const base90Asr = 90 - asrAlt;
-
-  // ============================================================
-  // 5. CHA prayers — write directly to slab.
-  //    Layout: [ms×6, co×6, cf×6, ta×6, meta×4, sunsetMs] = 29
-  //    slots 0-5: ms (fajr,sunrise,dhuhr,asr,maghrib,isha)
-  //    slot 28:   raw sunset ms (before maghrib adjustment)
-  //    uf bitmask: bit 0=fajr, 1=sunrise, 2=asr, 3=sunset/maghrib, 4=isha
-  // ============================================================
 
   let uf = 0;
 
@@ -804,11 +749,6 @@ function _computeCore(
     }
   }
 
-  // ============================================================
-  // 6. High-latitude fallback — inlined with pure ms arithmetic.
-  //    Fixes latent bug: applies adjFajrMs/adjIshaMs to fallback values.
-  // ============================================================
-
   if (config.highLatRule !== "none" && !(uf & 10)) {
     if (uf & 17) {
       // fajr (bit 0) or isha (bit 4) undefined
@@ -863,10 +803,6 @@ function _computeCore(
   return uf;
 }
 
-// ============================================================
-// Main entry point
-// ============================================================
-
 export function computePrayerTimes(config: PrayerTimeInput): PrayerTimesOutput {
   const resolved = _resolve(config);
   const S = _SLAB;
@@ -875,11 +811,6 @@ export function computePrayerTimes(config: PrayerTimeInput): PrayerTimesOutput {
   if (_slabOff >= _SLAB_LEN) _slabOff = 0;
   return new PTR(o, _computeCore(resolved, S, o));
 }
-
-// ============================================================
-// Context API — construct config once, call compute(date) per day.
-// Eliminates per-call object construction overhead (~120µs/iter).
-// ============================================================
 
 export interface PrayerContextConfig {
   readonly latitude: number;

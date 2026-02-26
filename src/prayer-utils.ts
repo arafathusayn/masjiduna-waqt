@@ -1,10 +1,6 @@
 import type { Prayer, HighLatRule } from "./schema.ts";
 import type { PrayerTimesOutput } from "./prayers.ts";
 
-// ============================================================
-// Prayer lookup & navigation utilities.
-// ============================================================
-
 /** Prayer names in chronological order (daytime). */
 const PRAYER_ORDER: Prayer[] = [
   "fajr" as Prayer,
@@ -87,11 +83,7 @@ export function nightPortions(
   }
 }
 
-/**
- * Recommended high-latitude rule based on observer latitude.
- * lat > 48° → seventh_of_night; otherwise → middle_of_night.
- * lat > 48 uses seventh_of_night; otherwise middle_of_night.
- */
+/** Returns `seventh_of_night` for latitudes above 48°, `middle_of_night` otherwise. */
 export function recommendedHighLatRule(latitude: number): HighLatRule {
   if (latitude > 48) return "seventh_of_night" as HighLatRule;
   return "middle_of_night" as HighLatRule;

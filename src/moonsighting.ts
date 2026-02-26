@@ -1,15 +1,6 @@
 import type { Shafaq } from "./schema.ts";
 import { daysSinceSolstice } from "./date-utils.ts";
 
-// ============================================================
-// MoonsightingCommittee seasonal twilight adjustments.
-//
-// These functions compute season-adjusted Fajr/Isha times based
-// on latitude and day-of-year. Used when method = MoonsightingCommittee
-// as safeFajr/safeIsha bounds.
-// ============================================================
-
-/** Piecewise seasonal interpolation across 6 segments (91/46/46/46/46/91 days). */
 function seasonalAdjustment(
   dyy: number,
   a: number,

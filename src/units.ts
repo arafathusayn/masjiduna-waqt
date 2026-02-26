@@ -1,9 +1,3 @@
-// ============================================================
-// Trig helpers — operate in degrees, accept and return plain number.
-// No branded types here: safety comes from the API boundary,
-// not from annotating every intermediate trig result.
-// ============================================================
-
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
 

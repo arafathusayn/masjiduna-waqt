@@ -1,16 +1,8 @@
 import type { MethodAngles, PrayerAdjustments } from "./schema.ts";
 
-// ============================================================
-// Madhab → shadow factor
-// ============================================================
-
 export function shadowFactor(m: "standard" | "hanafi"): 1 | 2 {
   return m === "standard" ? 1 : 2;
 }
-
-// ============================================================
-// Method profiles: angle-only, never imply a madhab
-// ============================================================
 
 export const MethodProfile = {
   Karachi: { fajr: 18, isha: 18, ishaInterval: null, maghribAngle: null },
@@ -33,10 +25,6 @@ export const MethodProfile = {
   Other: { fajr: 0, isha: 0, ishaInterval: null, maghribAngle: null },
 } satisfies Record<string, MethodAngles>;
 
-// ============================================================
-// Per-prayer minute adjustments
-// ============================================================
-
 export const NO_ADJUSTMENTS: PrayerAdjustments = {
   fajr: 0,
   sunrise: 0,
@@ -45,11 +33,6 @@ export const NO_ADJUSTMENTS: PrayerAdjustments = {
   maghrib: 0,
   isha: 0,
 };
-
-// ============================================================
-// Method adjustments — baked-in per-method minute offsets.
-// Per-method minute offsets. Separate from user adjustments.
-// ============================================================
 
 export const METHOD_ADJUSTMENTS: Record<string, Partial<PrayerAdjustments>> = {
   MWL: { dhuhr: 1 },

@@ -1,11 +1,5 @@
 import { normalizeDeg } from "./units.ts";
 
-// ============================================================
-// Qibla — great-circle bearing from observer to Kaaba.
-// Formula from "Spherical Trigonometry For the use of colleges
-// and schools" page 50.
-// ============================================================
-
 const MAKKAH_LAT = 21.4225241;
 const MAKKAH_LNG = 39.8261818;
 
