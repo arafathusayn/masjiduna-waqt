@@ -1,8 +1,11 @@
 {
   "name": "masjiduna-waqt",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Pure TypeScript prayer time calculation library. Zero runtime dependencies. Sunni-only Meeus-based solar algorithms.",
   "license": "AGPL-3.0",
+  "bin": {
+    "waqt": "./dist/waqt.mjs"
+  },
   "files": [
     "dist"
   ],
@@ -24,7 +27,8 @@
     }
   },
   "scripts": {
-    "build": "tsup",
+    "build:bin": "bun scripts/build-bin.ts",
+    "build": "tsup && bun run build:bin",
     "prepublishOnly": "bun run build",
     "test": "bun test tests/unit/",
     "test:e2e": "bun test tests/e2e/",
@@ -38,7 +42,9 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "@clack/prompts": "^1.0.1",
     "@types/bun": "latest",
+    "chrono-node": "^2.9.0",
     "mitata": "^1.0.34",
     "oxfmt": "^0.35.0",
     "tsup": "^8.5.1"

@@ -1,4 +1,5 @@
 src/
+bin/
 tests/
 benchmarks/
 scripts/
