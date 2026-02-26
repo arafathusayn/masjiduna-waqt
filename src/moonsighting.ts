@@ -2,30 +2,48 @@ import type { Shafaq } from "./schema.ts";
 import { daysSinceSolstice } from "./date-utils.ts";
 
 function seasonalAdjustment(
-  dyy: number,
-  a: number,
-  b: number,
-  c: number,
-  d: number,
+  daysSinceSolsticeN: number,
+  segmentValueA: number,
+  segmentValueB: number,
+  segmentValueC: number,
+  segmentValueD: number,
 ): number {
-  if (dyy < 91) {
-    return a + ((b - a) / 91) * dyy;
-  } else if (dyy < 137) {
-    return b + ((c - b) / 46) * (dyy - 91);
-  } else if (dyy < 183) {
-    return c + ((d - c) / 46) * (dyy - 137);
-  } else if (dyy < 229) {
-    return d + ((c - d) / 46) * (dyy - 183);
-  } else if (dyy < 275) {
-    return c + ((b - c) / 46) * (dyy - 229);
+  if (daysSinceSolsticeN < 91) {
+    return (
+      segmentValueA +
+      ((segmentValueB - segmentValueA) / 91) * daysSinceSolsticeN
+    );
+  } else if (daysSinceSolsticeN < 137) {
+    return (
+      segmentValueB +
+      ((segmentValueC - segmentValueB) / 46) * (daysSinceSolsticeN - 91)
+    );
+  } else if (daysSinceSolsticeN < 183) {
+    return (
+      segmentValueC +
+      ((segmentValueD - segmentValueC) / 46) * (daysSinceSolsticeN - 137)
+    );
+  } else if (daysSinceSolsticeN < 229) {
+    return (
+      segmentValueD +
+      ((segmentValueC - segmentValueD) / 46) * (daysSinceSolsticeN - 183)
+    );
+  } else if (daysSinceSolsticeN < 275) {
+    return (
+      segmentValueC +
+      ((segmentValueB - segmentValueC) / 46) * (daysSinceSolsticeN - 229)
+    );
   } else {
-    return b + ((a - b) / 91) * (dyy - 275);
+    return (
+      segmentValueB +
+      ((segmentValueA - segmentValueB) / 91) * (daysSinceSolsticeN - 275)
+    );
   }
 }
 
 /**
  * Season-adjusted morning twilight (Fajr bound) for MoonsightingCommittee.
- * Returns epoch ms that is `adjustment` minutes before sunrise.
+ * Returns epoch ms that is `minutesBeforeSunrise` minutes before sunrise.
  */
 export function seasonAdjustedMorningTwilight(
   lat: number,
@@ -33,21 +51,30 @@ export function seasonAdjustedMorningTwilight(
   year: number,
   sunriseMs: number,
 ): number {
-  const absLat = Math.abs(lat);
-  const a = 75 + (28.65 / 55) * absLat;
-  const b = 75 + (19.44 / 55) * absLat;
-  const c = 75 + (32.74 / 55) * absLat;
-  const d = 75 + (48.1 / 55) * absLat;
+  const absoluteLatitudeDeg = Math.abs(lat);
+  // Coefficients are empirically determined latitude-scaling factors for the piecewise seasonal curve
+  const segmentValueA = 75 + (28.65 / 55) * absoluteLatitudeDeg;
+  const segmentValueB = 75 + (19.44 / 55) * absoluteLatitudeDeg;
+  const segmentValueC = 75 + (32.74 / 55) * absoluteLatitudeDeg;
+  const segmentValueD = 75 + (48.1 / 55) * absoluteLatitudeDeg;
 
-  const dyy = daysSinceSolstice(doy, year, lat);
-  const adjustment = seasonalAdjustment(dyy, a, b, c, d);
+  // Seasonal position determines which twilight segment applies; the solstice is the reference point
+  const daysSinceSolsticeN = daysSinceSolstice(doy, year, lat);
+  const minutesBeforeSunrise = seasonalAdjustment(
+    daysSinceSolsticeN,
+    segmentValueA,
+    segmentValueB,
+    segmentValueC,
+    segmentValueD,
+  );
 
-  return sunriseMs + Math.round(adjustment * -60) * 1000;
+  // Fajr is before sunrise, so subtract the adjustment (converted from minutes to milliseconds)
+  return sunriseMs + Math.round(minutesBeforeSunrise * -60) * 1000;
 }
 
 /**
  * Season-adjusted evening twilight (Isha bound) for MoonsightingCommittee.
- * Returns epoch ms that is `adjustment` minutes after sunset.
+ * Returns epoch ms that is `minutesAfterSunset` minutes after sunset.
  * Shafaq variant controls the coefficient tables.
  */
 export function seasonAdjustedEveningTwilight(
@@ -57,29 +84,40 @@ export function seasonAdjustedEveningTwilight(
   sunsetMs: number,
   shafaq: Shafaq = "general" as Shafaq,
 ): number {
-  const absLat = Math.abs(lat);
-  let a: number, b: number, c: number, d: number;
+  const absoluteLatitudeDeg = Math.abs(lat);
+  // Coefficients are empirically determined latitude-scaling factors for the piecewise seasonal curve
+  let segmentValueA: number,
+    segmentValueB: number,
+    segmentValueC: number,
+    segmentValueD: number;
 
   if (shafaq === "ahmer") {
-    a = 62 + (17.4 / 55) * absLat;
-    b = 62 - (7.16 / 55) * absLat;
-    c = 62 + (5.12 / 55) * absLat;
-    d = 62 + (19.44 / 55) * absLat;
+    segmentValueA = 62 + (17.4 / 55) * absoluteLatitudeDeg;
+    segmentValueB = 62 - (7.16 / 55) * absoluteLatitudeDeg;
+    segmentValueC = 62 + (5.12 / 55) * absoluteLatitudeDeg;
+    segmentValueD = 62 + (19.44 / 55) * absoluteLatitudeDeg;
   } else if (shafaq === "abyad") {
-    a = 75 + (25.6 / 55) * absLat;
-    b = 75 + (7.16 / 55) * absLat;
-    c = 75 + (36.84 / 55) * absLat;
-    d = 75 + (81.84 / 55) * absLat;
+    segmentValueA = 75 + (25.6 / 55) * absoluteLatitudeDeg;
+    segmentValueB = 75 + (7.16 / 55) * absoluteLatitudeDeg;
+    segmentValueC = 75 + (36.84 / 55) * absoluteLatitudeDeg;
+    segmentValueD = 75 + (81.84 / 55) * absoluteLatitudeDeg;
   } else {
     // general (default)
-    a = 75 + (25.6 / 55) * absLat;
-    b = 75 + (2.05 / 55) * absLat;
-    c = 75 - (9.21 / 55) * absLat;
-    d = 75 + (6.14 / 55) * absLat;
+    segmentValueA = 75 + (25.6 / 55) * absoluteLatitudeDeg;
+    segmentValueB = 75 + (2.05 / 55) * absoluteLatitudeDeg;
+    segmentValueC = 75 - (9.21 / 55) * absoluteLatitudeDeg;
+    segmentValueD = 75 + (6.14 / 55) * absoluteLatitudeDeg;
   }
 
-  const dyy = daysSinceSolstice(doy, year, lat);
-  const adjustment = seasonalAdjustment(dyy, a, b, c, d);
+  // Seasonal position determines which twilight segment applies; the solstice is the reference point
+  const daysSinceSolsticeN = daysSinceSolstice(doy, year, lat);
+  const minutesAfterSunset = seasonalAdjustment(
+    daysSinceSolsticeN,
+    segmentValueA,
+    segmentValueB,
+    segmentValueC,
+    segmentValueD,
+  );
 
-  return sunsetMs + Math.round(adjustment * 60) * 1000;
+  return sunsetMs + Math.round(minutesAfterSunset * 60) * 1000;
 }

@@ -10,7 +10,8 @@ export type HourAngleResult =
     }
   | { readonly kind: "undefined"; readonly cosOmega: number };
 
-const EPSILON = 1e-6;
+// Tolerance for geometric impossibility: values within this epsilon of ±1 are clamped rather than rejected
+const COSINE_LIMIT_EPSILON = 1e-6;
 const RAD2DEG = 180 / Math.PI;
 const DEG2RAD = Math.PI / 180;
 
@@ -27,21 +28,30 @@ export function computeHourAngle(
   phi: number,
   delta: number,
 ): HourAngleResult {
-  const cosOmega =
+  // cos(H₀) = (sin(α) − sin(φ)·sin(δ)) / (cos(φ)·cos(δ)); H₀ is the hour angle when the sun is at the target altitude
+  const cosHourAngle =
     (sinDeg(alpha) - sinDeg(phi) * sinDeg(delta)) /
     (cosDeg(phi) * cosDeg(delta));
 
-  // True geometric impossibility
-  if (cosOmega < -(1 + EPSILON) || cosOmega > 1 + EPSILON) {
-    return { kind: "undefined", cosOmega };
+  // |cos(H₀)| > 1 + ε means the sun never reaches this altitude at this latitude/declination (polar day/night)
+  if (
+    cosHourAngle < -(1 + COSINE_LIMIT_EPSILON) ||
+    cosHourAngle > 1 + COSINE_LIMIT_EPSILON
+  ) {
+    return { kind: "undefined", cosOmega: cosHourAngle };
   }
 
-  // Clamp floating-point noise
-  const clamped = Math.abs(cosOmega) > 1;
-  const safe = Math.max(-1, Math.min(1, cosOmega));
-  const omegaDeg = Math.acos(safe) * RAD2DEG;
+  // Floating-point noise can push cos(H₀) just outside [−1,1]; clamp without changing the result meaningfully
+  const clamped = Math.abs(cosHourAngle) > 1;
+  const clampedCosHourAngle = Math.max(-1, Math.min(1, cosHourAngle));
+  const hourAngleDeg = Math.acos(clampedCosHourAngle) * RAD2DEG;
 
-  return { kind: "valid", angle: omegaDeg, cosOmega, clamped };
+  return {
+    kind: "valid",
+    angle: hourAngleDeg,
+    cosOmega: cosHourAngle,
+    clamped,
+  };
 }
 
 /** Convert hour angle (degrees) to time offset (hours). */
@@ -50,8 +60,8 @@ export function hourAngleToHours(omegaDeg: number): number {
 }
 
 /** Normalize a number to [0, max). */
-export function normalizeToScale(num: number, max: number): number {
-  return num - max * Math.floor(num / max);
+export function normalizeToScale(value: number, rangeMax: number): number {
+  return value - rangeMax * Math.floor(value / rangeMax);
 }
 
 /** Shift angle to [-180, 180]. */
@@ -62,39 +72,56 @@ export function quadrantShiftAngle(angle: number): number {
 
 /** Quadratic interpolation — Meeus p.24. */
 export function interpolate(
-  y2: number,
-  y1: number,
-  y3: number,
-  n: number,
+  valueAtDate: number,
+  valueYesterday: number,
+  valueTomorrow: number,
+  dayFraction: number,
 ): number {
-  const a = y2 - y1;
-  const b = y3 - y2;
-  const c = b - a;
-  return y2 + (n / 2) * (a + b + n * c);
+  // First differences across the three-day window; used for the quadratic correction term
+  const firstDifference = valueAtDate - valueYesterday;
+  const secondDifference = valueTomorrow - valueAtDate;
+  const secondDifferenceChange = secondDifference - firstDifference;
+  return (
+    valueAtDate +
+    (dayFraction / 2) *
+      (firstDifference +
+        secondDifference +
+        dayFraction * secondDifferenceChange)
+  );
 }
 
 /** Quadratic interpolation with angle unwinding — Meeus p.24. */
 export function interpolateAngles(
-  y2: number,
-  y1: number,
-  y3: number,
-  n: number,
+  valueAtDate: number,
+  valueYesterday: number,
+  valueTomorrow: number,
+  dayFraction: number,
 ): number {
-  const a = normalizeDeg(y2 - y1);
-  const b = normalizeDeg(y3 - y2);
-  const c = b - a;
-  return y2 + (n / 2) * (a + b + n * c);
+  // Normalize differences to handle wraparound at 0°/360° (e.g. right ascension crossing 360°)
+  const firstDifference = normalizeDeg(valueAtDate - valueYesterday);
+  const secondDifference = normalizeDeg(valueTomorrow - valueAtDate);
+  const secondDifferenceChange = secondDifference - firstDifference;
+  return (
+    valueAtDate +
+    (dayFraction / 2) *
+      (firstDifference +
+        secondDifference +
+        dayFraction * secondDifferenceChange)
+  );
 }
 
 /** Altitude of a celestial body — Meeus p.93. */
 export function altitudeOfCelestialBody(
-  phi: number,
-  delta: number,
-  H: number,
+  observerLatitudeDeg: number,
+  declinationDeg: number,
+  localHourAngleDeg: number,
 ): number {
   return (
     Math.asin(
-      sinDeg(phi) * sinDeg(delta) + cosDeg(phi) * cosDeg(delta) * cosDeg(H),
+      sinDeg(observerLatitudeDeg) * sinDeg(declinationDeg) +
+        cosDeg(observerLatitudeDeg) *
+          cosDeg(declinationDeg) *
+          cosDeg(localHourAngleDeg),
     ) * RAD2DEG
   );
 }
@@ -111,8 +138,12 @@ export function approximateTransit(
   siderealTime: number,
   rightAscension: number,
 ): number {
-  const Lw = -lng;
-  return normalizeToScale((rightAscension + Lw - siderealTime) / 360, 1);
+  // Meeus sign convention: west longitude is positive (Lw = −lng for east-positive input)
+  const longitudeWestDeg = -lng;
+  return normalizeToScale(
+    (rightAscension + longitudeWestDeg - siderealTime) / 360,
+    1,
+  );
 }
 
 /**
@@ -127,19 +158,34 @@ export function approximateTransit(
  * @param a3 - RA on the next day (degrees)
  */
 export function correctedTransit(
-  m0: number,
+  approximateTransitFraction: number,
   lng: number,
-  Theta0: number,
-  a2: number,
-  a1: number,
-  a3: number,
+  greenwichSiderealTimeDeg: number,
+  rightAscensionAtDate: number,
+  rightAscensionYesterday: number,
+  rightAscensionTomorrow: number,
 ): number {
-  const Lw = -lng;
-  const Theta = normalizeDeg(Theta0 + 360.985647 * m0);
-  const a = normalizeDeg(interpolateAngles(a2, a1, a3, m0));
-  const H = quadrantShiftAngle(Theta - Lw - a);
-  const dm = H / -360;
-  return (m0 + dm) * 24;
+  // Meeus sign convention: west longitude is positive
+  const longitudeWestDeg = -lng;
+  // Advance sidereal time from the reference epoch to the trial transit time
+  const localSiderealTimeDeg = normalizeDeg(
+    greenwichSiderealTimeDeg + 360.985647 * approximateTransitFraction,
+  );
+  // Interpolate right ascension to the trial time using the three-day window (Meeus p.24)
+  const interpolatedRightAscension = normalizeDeg(
+    interpolateAngles(
+      rightAscensionAtDate,
+      rightAscensionYesterday,
+      rightAscensionTomorrow,
+      approximateTransitFraction,
+    ),
+  );
+  // Local hour angle at transit should be ~0; the residual gives the fractional-day correction
+  const localHourAngle = quadrantShiftAngle(
+    localSiderealTimeDeg - longitudeWestDeg - interpolatedRightAscension,
+  );
+  const transitCorrection = localHourAngle / -360;
+  return (approximateTransitFraction + transitCorrection) * 24;
 }
 
 /**
@@ -161,117 +207,188 @@ export function correctedTransit(
  * @returns HourAngleResult with UTC hours (in valid.angle) or undefined
  */
 export function correctedHourAngle(
-  m0: number,
-  angle: number,
-  lat: number,
+  approximateTransitFraction: number,
+  targetAltitudeDeg: number,
+  observerLatitudeDeg: number,
   lng: number,
   afterTransit: boolean,
-  Theta0: number,
-  a2: number,
-  a1: number,
-  a3: number,
-  d2: number,
-  d1: number,
-  d3: number,
+  greenwichSiderealTimeDeg: number,
+  rightAscensionAtDate: number,
+  rightAscensionYesterday: number,
+  rightAscensionTomorrow: number,
+  declinationAtDate: number,
+  declinationYesterday: number,
+  declinationTomorrow: number,
 ): HourAngleResult {
-  const Lw = -lng;
+  // Meeus sign convention: west longitude is positive
+  const longitudeWestDeg = -lng;
 
   // Pre-compute lat trig (reused below)
-  const latRad = lat * DEG2RAD;
-  const sinLat = Math.sin(latRad);
-  const cosLat = Math.cos(latRad);
+  const observerLatitudeRad = observerLatitudeDeg * DEG2RAD;
+  const sinObserverLatitude = Math.sin(observerLatitudeRad);
+  const cosObserverLatitude = Math.cos(observerLatitudeRad);
 
-  // Initial hour angle from day-of declination
-  const d2Rad = d2 * DEG2RAD;
-  const cosH0 =
-    (Math.sin(angle * DEG2RAD) - sinLat * Math.sin(d2Rad)) /
-    (cosLat * Math.cos(d2Rad));
+  // cos(H₀) = (sin(α) − sin(φ)·sin(δ)) / (cos(φ)·cos(δ)); H₀ is the hour angle when the sun is at the target altitude
+  const declinationRad = declinationAtDate * DEG2RAD;
+  const cosInitialHourAngle =
+    (Math.sin(targetAltitudeDeg * DEG2RAD) -
+      sinObserverLatitude * Math.sin(declinationRad)) /
+    (cosObserverLatitude * Math.cos(declinationRad));
 
-  // Check solvability
-  if (cosH0 < -(1 + EPSILON) || cosH0 > 1 + EPSILON) {
-    return { kind: "undefined", cosOmega: cosH0 };
+  // |cos(H₀)| > 1 + ε means the sun never reaches this altitude at this latitude/declination (polar day/night)
+  if (
+    cosInitialHourAngle < -(1 + COSINE_LIMIT_EPSILON) ||
+    cosInitialHourAngle > 1 + COSINE_LIMIT_EPSILON
+  ) {
+    return { kind: "undefined", cosOmega: cosInitialHourAngle };
   }
 
-  const clamped = Math.abs(cosH0) > 1;
-  const safeCos = Math.max(-1, Math.min(1, cosH0));
-  const H0 = Math.acos(safeCos) * RAD2DEG;
+  // Floating-point noise can push cos(H₀) just outside [−1,1]; clamp without changing the result meaningfully
+  const clamped = Math.abs(cosInitialHourAngle) > 1;
+  const clampedCos = Math.max(-1, Math.min(1, cosInitialHourAngle));
+  const initialHourAngleDeg = Math.acos(clampedCos) * RAD2DEG;
 
-  const m = afterTransit ? m0 + H0 / 360 : m0 - H0 / 360;
+  // Day fraction for the event: transit ± H₀/360 (minus for AM events, plus for PM events)
+  const eventDayFraction = afterTransit
+    ? approximateTransitFraction + initialHourAngleDeg / 360
+    : approximateTransitFraction - initialHourAngleDeg / 360;
 
-  // Iterative correction (one pass)
-  const Theta = normalizeDeg(Theta0 + 360.985647 * m);
-  const a = normalizeDeg(interpolateAngles(a2, a1, a3, m));
-  const delta = interpolate(d2, d1, d3, m);
-  const H = Theta - Lw - a;
+  // One-iteration refinement: interpolate RA/declination to the trial time, recompute altitude, apply altitude residual as dm
+  const localSiderealTimeDeg = normalizeDeg(
+    greenwichSiderealTimeDeg + 360.985647 * eventDayFraction,
+  );
+  const interpolatedRightAscension = normalizeDeg(
+    interpolateAngles(
+      rightAscensionAtDate,
+      rightAscensionYesterday,
+      rightAscensionTomorrow,
+      eventDayFraction,
+    ),
+  );
+  const interpolatedDeclination = interpolate(
+    declinationAtDate,
+    declinationYesterday,
+    declinationTomorrow,
+    eventDayFraction,
+  );
+  const localHourAngle =
+    localSiderealTimeDeg - longitudeWestDeg - interpolatedRightAscension;
 
   // Inline altitudeOfCelestialBody for perf (avoid extra function call + repeated DEG2RAD mul)
-  const deltaRad = delta * DEG2RAD;
-  const HRad = H * DEG2RAD;
-  const h =
+  const interpolatedDeclinationRad = interpolatedDeclination * DEG2RAD;
+  const localHourAngleRad = localHourAngle * DEG2RAD;
+  const actualAltitudeDeg =
     Math.asin(
-      sinLat * Math.sin(deltaRad) +
-        cosLat * Math.cos(deltaRad) * Math.cos(HRad),
+      sinObserverLatitude * Math.sin(interpolatedDeclinationRad) +
+        cosObserverLatitude *
+          Math.cos(interpolatedDeclinationRad) *
+          Math.cos(localHourAngleRad),
     ) * RAD2DEG;
 
-  const dm = (h - angle) / (360 * Math.cos(deltaRad) * cosLat * Math.sin(HRad));
+  const eventCorrection =
+    (actualAltitudeDeg - targetAltitudeDeg) /
+    (360 *
+      Math.cos(interpolatedDeclinationRad) *
+      cosObserverLatitude *
+      Math.sin(localHourAngleRad));
 
-  const utcHours = (m + dm) * 24;
+  const eventUtcHours = (eventDayFraction + eventCorrection) * 24;
 
-  return { kind: "valid", angle: utcHours, cosOmega: cosH0, clamped };
+  return {
+    kind: "valid",
+    angle: eventUtcHours,
+    cosOmega: cosInitialHourAngle,
+    clamped,
+  };
 }
 
 /**
  * Corrected hour angle — fast variant with pre-computed latitude trig.
- * Used internally by computePrayerTimes to avoid recomputing sinLat/cosLat
+ * Used internally by computePrayerTimes to avoid recomputing sinObserverLatitude/cosObserverLatitude
  * for each of the 5 CHA calls.
  */
 export function correctedHourAngleFast(
-  m0: number,
-  angle: number,
-  sinLat: number,
-  cosLat: number,
-  Lw: number,
+  approximateTransitFraction: number,
+  targetAltitudeDeg: number,
+  sinObserverLatitude: number,
+  cosObserverLatitude: number,
+  longitudeWestDeg: number,
   afterTransit: boolean,
-  Theta0: number,
-  a2: number,
-  a1: number,
-  a3: number,
-  d2: number,
-  d1: number,
-  d3: number,
+  greenwichSiderealTimeDeg: number,
+  rightAscensionAtDate: number,
+  rightAscensionYesterday: number,
+  rightAscensionTomorrow: number,
+  declinationAtDate: number,
+  declinationYesterday: number,
+  declinationTomorrow: number,
 ): HourAngleResult {
-  // Initial hour angle from day-of declination
-  const d2Rad = d2 * DEG2RAD;
-  const cosH0 =
-    (Math.sin(angle * DEG2RAD) - sinLat * Math.sin(d2Rad)) /
-    (cosLat * Math.cos(d2Rad));
+  // cos(H₀) = (sin(α) − sin(φ)·sin(δ)) / (cos(φ)·cos(δ)); H₀ is the hour angle when the sun is at the target altitude
+  const declinationRad = declinationAtDate * DEG2RAD;
+  const cosInitialHourAngle =
+    (Math.sin(targetAltitudeDeg * DEG2RAD) -
+      sinObserverLatitude * Math.sin(declinationRad)) /
+    (cosObserverLatitude * Math.cos(declinationRad));
 
-  // Check solvability
-  if (cosH0 < -(1 + EPSILON) || cosH0 > 1 + EPSILON) {
-    return { kind: "undefined", cosOmega: cosH0 };
+  // |cos(H₀)| > 1 + ε means the sun never reaches this altitude at this latitude/declination (polar day/night)
+  if (
+    cosInitialHourAngle < -(1 + COSINE_LIMIT_EPSILON) ||
+    cosInitialHourAngle > 1 + COSINE_LIMIT_EPSILON
+  ) {
+    return { kind: "undefined", cosOmega: cosInitialHourAngle };
   }
 
-  const clamped = Math.abs(cosH0) > 1;
-  const safeCos = Math.max(-1, Math.min(1, cosH0));
-  const H0 = Math.acos(safeCos) * RAD2DEG;
+  // Floating-point noise can push cos(H₀) just outside [−1,1]; clamp without changing the result meaningfully
+  const clamped = Math.abs(cosInitialHourAngle) > 1;
+  const clampedCos = Math.max(-1, Math.min(1, cosInitialHourAngle));
+  const initialHourAngleDeg = Math.acos(clampedCos) * RAD2DEG;
 
-  const m = afterTransit ? m0 + H0 / 360 : m0 - H0 / 360;
+  // Day fraction for the event: transit ± H₀/360 (minus for AM events, plus for PM events)
+  const eventDayFraction = afterTransit
+    ? approximateTransitFraction + initialHourAngleDeg / 360
+    : approximateTransitFraction - initialHourAngleDeg / 360;
 
-  // Iterative correction (one pass)
-  const Theta = normalizeDeg(Theta0 + 360.985647 * m);
-  const a = normalizeDeg(interpolateAngles(a2, a1, a3, m));
-  const delta = interpolate(d2, d1, d3, m);
-  const H = Theta - Lw - a;
+  // One-iteration refinement: interpolate RA/declination to the trial time, recompute altitude, apply altitude residual as dm
+  const localSiderealTimeDeg = normalizeDeg(
+    greenwichSiderealTimeDeg + 360.985647 * eventDayFraction,
+  );
+  const interpolatedRightAscension = normalizeDeg(
+    interpolateAngles(
+      rightAscensionAtDate,
+      rightAscensionYesterday,
+      rightAscensionTomorrow,
+      eventDayFraction,
+    ),
+  );
+  const interpolatedDeclination = interpolate(
+    declinationAtDate,
+    declinationYesterday,
+    declinationTomorrow,
+    eventDayFraction,
+  );
+  const localHourAngle =
+    localSiderealTimeDeg - longitudeWestDeg - interpolatedRightAscension;
 
-  const deltaRad = delta * DEG2RAD;
-  const HRad = H * DEG2RAD;
-  const h =
+  const interpolatedDeclinationRad = interpolatedDeclination * DEG2RAD;
+  const localHourAngleRad = localHourAngle * DEG2RAD;
+  const actualAltitudeDeg =
     Math.asin(
-      sinLat * Math.sin(deltaRad) +
-        cosLat * Math.cos(deltaRad) * Math.cos(HRad),
+      sinObserverLatitude * Math.sin(interpolatedDeclinationRad) +
+        cosObserverLatitude *
+          Math.cos(interpolatedDeclinationRad) *
+          Math.cos(localHourAngleRad),
     ) * RAD2DEG;
 
-  const dm = (h - angle) / (360 * Math.cos(deltaRad) * cosLat * Math.sin(HRad));
+  const eventCorrection =
+    (actualAltitudeDeg - targetAltitudeDeg) /
+    (360 *
+      Math.cos(interpolatedDeclinationRad) *
+      cosObserverLatitude *
+      Math.sin(localHourAngleRad));
 
-  return { kind: "valid", angle: (m + dm) * 24, cosOmega: cosH0, clamped };
+  return {
+    kind: "valid",
+    angle: (eventDayFraction + eventCorrection) * 24,
+    cosOmega: cosInitialHourAngle,
+    clamped,
+  };
 }

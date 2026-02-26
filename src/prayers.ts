@@ -146,23 +146,23 @@ const DC_STRIDE = 16;
 const _dcJDs = new Float64Array(512);
 const _dc = new Float64Array(512 * DC_STRIDE);
 
-const DC_THETA0 = 0;
-const DC_A2 = 1;
-const DC_D2 = 2;
-const DC_RA_AB = 3; // raA + raB (precomputed sum)
-const DC_RA_C = 4; // raB - raA (second difference)
-const DC_DECL_AB = 5; // declA + declB (precomputed sum)
-const DC_DECL_C = 6; // declB - declA (second difference)
-const DC_SIN_D2 = 7;
-const DC_COS_D2 = 8;
-const DC_EQT = 9;
-const DC_MIDNIGHT_MS = 10;
+const DC_GREENWICH_SIDEREAL_TIME = 0;
+const DC_RIGHT_ASCENSION_TODAY = 1;
+const DC_DECLINATION_TODAY = 2;
+const DC_RA_INTERPOLATION_AB = 3; // rightAscensionDiffPrevToToday + rightAscensionDiffTodayToNext (precomputed sum)
+const DC_RA_INTERPOLATION_C = 4; // rightAscensionDiffTodayToNext - rightAscensionDiffPrevToToday (second difference)
+const DC_DECL_INTERPOLATION_AB = 5; // declinationDiffPrevToToday + declinationDiffTodayToNext (precomputed sum)
+const DC_DECL_INTERPOLATION_C = 6; // declinationDiffTodayToNext - declinationDiffPrevToToday (second difference)
+const DC_SIN_DECLINATION_TODAY = 7;
+const DC_COS_DECLINATION_TODAY = 8;
+const DC_EQUATION_OF_TIME = 9;
+const DC_UTC_MIDNIGHT_MS = 10;
 
 /** Clear the solar position cache (useful for long-running processes). */
 export function clearSolarCache(): void {
   _cacheJDs.fill(0);
   _dcJDs.fill(0);
-  _ccLat = NaN; // invalidate config cache
+  _prevConfigLatitude = NaN; // invalidate config cache
   _slabOff = 0; // reset slab ring buffer
 }
 
@@ -175,56 +175,76 @@ const INV360 = 1 / 360;
 const MS_PER_DAY = 86_400_000;
 const MS_PER_MIN = 60_000;
 
-const _S_SCALE = 5;
-const _S_OFF = 540;
-const _S_BASE = _S_OFF * _S_SCALE;
-const _C_BASE = (_S_OFF + 90) * _S_SCALE;
-const _S_SIZE = 1170 * _S_SCALE;
-const _S = new Float64Array(_S_SIZE + 2);
-for (let i = 0; i <= _S_SIZE; i++) {
-  _S[i] = Math.sin((i / _S_SCALE - _S_OFF) * DEG2RAD);
+// Lookup table for sin/cos: oversampled by _SIN_OVERSAMPLE_FACTOR samples per degree
+const _SIN_OVERSAMPLE_FACTOR = 5;
+// Offset so that index 0 of the table corresponds to −540°
+const _SIN_TABLE_OFFSET = 540;
+const _SIN_TABLE_BASE_INDEX = _SIN_TABLE_OFFSET * _SIN_OVERSAMPLE_FACTOR;
+const _COS_TABLE_BASE_INDEX = (_SIN_TABLE_OFFSET + 90) * _SIN_OVERSAMPLE_FACTOR;
+const _SIN_TABLE_SIZE = 1170 * _SIN_OVERSAMPLE_FACTOR;
+const _sinTable = new Float64Array(_SIN_TABLE_SIZE + 2);
+for (let i = 0; i <= _SIN_TABLE_SIZE; i++) {
+  _sinTable[i] = Math.sin(
+    (i / _SIN_OVERSAMPLE_FACTOR - _SIN_TABLE_OFFSET) * DEG2RAD,
+  );
 }
-_S[_S_SIZE + 1] = _S[_S_SIZE]!;
+_sinTable[_SIN_TABLE_SIZE + 1] = _sinTable[_SIN_TABLE_SIZE]!;
 
-const _A_HALF = 4096;
-const _A_SIZE = _A_HALF * 2;
-const _A = new Float64Array(_A_SIZE + 2);
-for (let i = 0; i <= _A_SIZE; i++) {
-  _A[i] = Math.acos(i / _A_HALF - 1) * RAD2DEG;
+const _ACOS_TABLE_HALF_SIZE = 4096;
+const _ACOS_TABLE_SIZE = _ACOS_TABLE_HALF_SIZE * 2;
+const _acosTable = new Float64Array(_ACOS_TABLE_SIZE + 2);
+for (let i = 0; i <= _ACOS_TABLE_SIZE; i++) {
+  _acosTable[i] = Math.acos(i / _ACOS_TABLE_HALF_SIZE - 1) * RAD2DEG;
 }
-_A[_A_SIZE + 1] = _A[_A_SIZE]!;
+_acosTable[_ACOS_TABLE_SIZE + 1] = _acosTable[_ACOS_TABLE_SIZE]!;
 
-const _AT_HALF = 4096;
-const _AT_SIZE = _AT_HALF * 2;
-const _AT = new Float32Array(_AT_SIZE + 2);
-for (let i = 0; i <= _AT_SIZE; i++) {
-  _AT[i] = Math.atan(i / _AT_HALF - 1) * RAD2DEG;
+const _ATAN_TABLE_HALF_SIZE = 4096;
+const _ATAN_TABLE_SIZE = _ATAN_TABLE_HALF_SIZE * 2;
+const _atanTable = new Float32Array(_ATAN_TABLE_SIZE + 2);
+for (let i = 0; i <= _ATAN_TABLE_SIZE; i++) {
+  _atanTable[i] = Math.atan(i / _ATAN_TABLE_HALF_SIZE - 1) * RAD2DEG;
 }
-_AT[_AT_SIZE + 1] = _AT[_AT_SIZE]!;
+_atanTable[_ATAN_TABLE_SIZE + 1] = _atanTable[_ATAN_TABLE_SIZE]!;
 
 function tSin(deg: number): number {
-  const idx = deg * _S_SCALE + _S_BASE;
-  const i = idx | 0;
-  return _S[i]! + (idx - i) * (_S[i + 1]! - _S[i]!);
+  const tableIndex = deg * _SIN_OVERSAMPLE_FACTOR + _SIN_TABLE_BASE_INDEX;
+  const tableFloor = tableIndex | 0;
+  return (
+    _sinTable[tableFloor]! +
+    (tableIndex - tableFloor) *
+      (_sinTable[tableFloor + 1]! - _sinTable[tableFloor]!)
+  );
 }
 
 function tCos(deg: number): number {
-  const idx = deg * _S_SCALE + _C_BASE;
-  const i = idx | 0;
-  return _S[i]! + (idx - i) * (_S[i + 1]! - _S[i]!);
+  const tableIndex = deg * _SIN_OVERSAMPLE_FACTOR + _COS_TABLE_BASE_INDEX;
+  const tableFloor = tableIndex | 0;
+  return (
+    _sinTable[tableFloor]! +
+    (tableIndex - tableFloor) *
+      (_sinTable[tableFloor + 1]! - _sinTable[tableFloor]!)
+  );
 }
 
 function tAcos(x: number): number {
-  const cx = Math.max(-1, Math.min(1, x));
-  const idx = (cx + 1) * _A_HALF;
-  const i = idx | 0;
-  return _A[i]! + (idx - i) * (_A[i + 1]! - _A[i]!);
+  const clampedX = Math.max(-1, Math.min(1, x));
+  const tableIndex = (clampedX + 1) * _ACOS_TABLE_HALF_SIZE;
+  const tableFloor = tableIndex | 0;
+  return (
+    _acosTable[tableFloor]! +
+    (tableIndex - tableFloor) *
+      (_acosTable[tableFloor + 1]! - _acosTable[tableFloor]!)
+  );
 }
 
 function tAtan(x: number): number {
-  const idx = (x + 1) * _AT_HALF;
-  const i = idx | 0;
-  return _AT[i]! + (idx - i) * (_AT[i + 1]! - _AT[i]!);
+  const tableIndex = (x + 1) * _ATAN_TABLE_HALF_SIZE;
+  const tableFloor = tableIndex | 0;
+  return (
+    _atanTable[tableFloor]! +
+    (tableIndex - tableFloor) *
+      (_atanTable[tableFloor + 1]! - _atanTable[tableFloor]!)
+  );
 }
 
 const _SLAB_SLOTS = 16384;
@@ -256,21 +276,26 @@ const UNDEF_FAJR: PrayerTimeResult = {
 class V {
   declare kind: "valid";
   ms: number;
-  _co: number | null;
-  _cf: number;
-  _ta: number;
+  _cosOmega: number | null;
+  _compactFlags: number;
+  _targetAltitude: number;
 
-  constructor(ms: number, co: number | null, cf: number, ta: number) {
+  constructor(
+    ms: number,
+    cosOmega: number | null,
+    compactFlags: number,
+    targetAltitude: number,
+  ) {
     this.ms = ms;
-    this._co = co;
-    this._cf = cf;
-    this._ta = ta;
+    this._cosOmega = cosOmega;
+    this._compactFlags = compactFlags;
+    this._targetAltitude = targetAltitude;
   }
 
   get diagnostics(): PrayerDiagnostics {
-    const cf = this._cf;
+    const cf = this._compactFlags;
     return {
-      cosOmega: this._co,
+      cosOmega: this._cosOmega,
       clamped: !!(cf & 1),
       fallbackUsed:
         cf & 2
@@ -282,7 +307,7 @@ class V {
               : cf & 16
                 ? "twilight_angle"
                 : null,
-      targetAltitude: this._ta,
+      targetAltitude: this._targetAltitude,
     };
   }
 }
@@ -326,29 +351,36 @@ function _undefFromSlot(o: number, p: number): PrayerTimeResult {
 }
 
 class PTR implements PrayerTimesOutput {
-  _o: number;
-  _uf: number;
+  _slabOffset: number;
+  _undefinedPrayersBitmask: number;
 
-  constructor(o: number, uf: number) {
-    this._o = o;
-    this._uf = uf;
+  constructor(slabOffset: number, undefinedPrayersBitmask: number) {
+    this._slabOffset = slabOffset;
+    this._undefinedPrayersBitmask = undefinedPrayersBitmask;
   }
 
   get fajr(): PrayerTimeResult {
-    return this._uf & 1 ? _undefFromSlot(this._o, 0) : _vFromSlot(this._o, 0);
+    return this._undefinedPrayersBitmask & 1
+      ? _undefFromSlot(this._slabOffset, 0)
+      : _vFromSlot(this._slabOffset, 0);
   }
   get sunrise(): PrayerTimeResult {
-    return this._uf & 2 ? _undefFromSlot(this._o, 1) : _vFromSlot(this._o, 1);
+    return this._undefinedPrayersBitmask & 2
+      ? _undefFromSlot(this._slabOffset, 1)
+      : _vFromSlot(this._slabOffset, 1);
   }
   get dhuhr(): PrayerTimeResult {
-    return _vFromSlot(this._o, 2);
+    return _vFromSlot(this._slabOffset, 2);
   }
   get asr(): PrayerTimeResult {
-    return this._uf & 4 ? _undefFromSlot(this._o, 3) : _vFromSlot(this._o, 3);
+    return this._undefinedPrayersBitmask & 4
+      ? _undefFromSlot(this._slabOffset, 3)
+      : _vFromSlot(this._slabOffset, 3);
   }
   get sunset(): PrayerTimeResult {
-    if (this._uf & 8) return _undefFromSlot(this._o, 4);
-    const o = this._o;
+    if (this._undefinedPrayersBitmask & 8)
+      return _undefFromSlot(this._slabOffset, 4);
+    const o = this._slabOffset;
     const co = _SLAB[o + 10]!;
     return new V(
       _SLAB[o + 28]!,
@@ -358,35 +390,52 @@ class PTR implements PrayerTimesOutput {
     );
   }
   get maghrib(): PrayerTimeResult {
-    return this._uf & 8 ? _undefFromSlot(this._o, 4) : _vFromSlot(this._o, 4);
+    return this._undefinedPrayersBitmask & 8
+      ? _undefFromSlot(this._slabOffset, 4)
+      : _vFromSlot(this._slabOffset, 4);
   }
   get isha(): PrayerTimeResult {
-    return this._uf & 16 ? _undefFromSlot(this._o, 5) : _vFromSlot(this._o, 5);
+    return this._undefinedPrayersBitmask & 16
+      ? _undefFromSlot(this._slabOffset, 5)
+      : _vFromSlot(this._slabOffset, 5);
   }
 
   get midnight(): PrayerTimeResult {
-    if (this._uf & 10) return UNDEF_NIGHT;
-    const o = this._o;
-    const sMs = _SLAB[o + 28]!;
-    return new V(sMs + (_SLAB[o + 1]! + MS_PER_DAY - sMs) * 0.5, null, 0, 0);
+    if (this._undefinedPrayersBitmask & 10) return UNDEF_NIGHT;
+    const o = this._slabOffset;
+    // Night duration = next sunrise − today's raw sunset; midpoint is midnight
+    const rawSunsetMs = _SLAB[o + 28]!;
+    return new V(
+      rawSunsetMs + (_SLAB[o + 1]! + MS_PER_DAY - rawSunsetMs) * 0.5,
+      null,
+      0,
+      0,
+    );
   }
   get imsak(): PrayerTimeResult {
-    return this._uf & 1
+    return this._undefinedPrayersBitmask & 1
       ? UNDEF_FAJR
-      : new V(_SLAB[this._o]! - 10 * MS_PER_MIN, null, 0, 0);
+      : new V(_SLAB[this._slabOffset]! - 10 * MS_PER_MIN, null, 0, 0);
   }
   get firstThird(): PrayerTimeResult {
-    if (this._uf & 10) return UNDEF_NIGHT;
-    const o = this._o;
-    const sMs = _SLAB[o + 28]!;
-    return new V(sMs + (_SLAB[o + 1]! + MS_PER_DAY - sMs) / 3, null, 0, 0);
+    if (this._undefinedPrayersBitmask & 10) return UNDEF_NIGHT;
+    const o = this._slabOffset;
+    // Night duration = next sunrise − today's raw sunset; first third is one-third through the night
+    const rawSunsetMs = _SLAB[o + 28]!;
+    return new V(
+      rawSunsetMs + (_SLAB[o + 1]! + MS_PER_DAY - rawSunsetMs) / 3,
+      null,
+      0,
+      0,
+    );
   }
   get lastThird(): PrayerTimeResult {
-    if (this._uf & 10) return UNDEF_NIGHT;
-    const o = this._o;
-    const sMs = _SLAB[o + 28]!;
+    if (this._undefinedPrayersBitmask & 10) return UNDEF_NIGHT;
+    const o = this._slabOffset;
+    // Night duration = next sunrise − today's raw sunset; last third begins two-thirds through the night
+    const rawSunsetMs = _SLAB[o + 28]!;
     return new V(
-      sMs + (_SLAB[o + 1]! + MS_PER_DAY - sMs) * (2 / 3),
+      rawSunsetMs + (_SLAB[o + 1]! + MS_PER_DAY - rawSunsetMs) * (2 / 3),
       null,
       0,
       0,
@@ -394,7 +443,7 @@ class PTR implements PrayerTimesOutput {
   }
 
   get meta() {
-    const o = this._o;
+    const o = this._slabOffset;
     return {
       declination: _SLAB[o + 24]!,
       eqtMinutes: _SLAB[o + 25]!,
@@ -404,317 +453,436 @@ class PTR implements PrayerTimesOutput {
   }
 }
 
-let _ccLat = NaN;
-let _ccLng = NaN;
-let _ccElev = NaN;
-let _ccFajr = NaN;
-let _ccIsha = NaN;
-let _ccIshaInt: number | null | undefined;
-let _ccMadhab = "";
-let _ccAdjF = NaN;
-let _ccAdjSr = NaN;
-let _ccAdjD = NaN;
-let _ccAdjA = NaN;
-let _ccAdjM = NaN;
-let _ccAdjI = NaN;
+// Module-level config cache: tracks the previous call's config so we can skip recomputing
+// location/method-derived constants when they haven't changed
+let _prevConfigLatitude = NaN;
+let _prevConfigLongitude = NaN;
+let _prevConfigElevation = NaN;
+let _prevConfigFajrAngle = NaN;
+let _prevConfigIshaAngle = NaN;
+let _prevConfigIshaInterval: number | null | undefined;
+let _prevConfigMadhab = "";
+let _prevAdjFajr = NaN;
+let _prevAdjSunrise = NaN;
+let _prevAdjDhuhr = NaN;
+let _prevAdjAsr = NaN;
+let _prevAdjMaghrib = NaN;
+let _prevAdjIsha = NaN;
 
-// Cached config-derived values
-let _sinLat = 0;
-let _cosLat = 0;
-let _Lw = 0;
-let _360cosLat = 0;
-let _horizonAlt = 0;
-let _sinHorizonAlt = 0;
-let _base90Horizon = 0;
-let _fajrAlt = 0;
-let _sinFajrAlt = 0;
-let _base90Fajr = 0;
-let _ishaAlt = 0;
-let _sinIshaAlt = 0;
-let _base90Isha = 0;
-let _adjFajrMs = 0;
-let _adjSunriseMs = 0;
-let _adjDhuhrMs = 0;
-let _adjAsrMs = 0;
-let _adjMaghribMs = 0;
-let _adjIshaMs = 0;
-let _shadowK = 1;
+// Cached config-derived values (recomputed only when config changes)
+let _sinLatitude = 0;
+let _cosLatitude = 0;
+let _longitudeWestDeg = 0;
+let _threeSixtyTimesCosLat = 0;
+let _horizonAltitudeDeg = 0;
+let _sinHorizonAltitude = 0;
+let _zenithDistanceHorizonDeg = 0;
+let _fajrAltitudeDeg = 0;
+let _sinFajrAltitude = 0;
+let _zenithDistanceFajrDeg = 0;
+let _ishaAltitudeDeg = 0;
+let _sinIshaAltitude = 0;
+let _zenithDistanceIshaDeg = 0;
+let _fajrAdjustmentMs = 0;
+let _sunriseAdjustmentMs = 0;
+let _dhuhrAdjustmentMs = 0;
+let _asrAdjustmentMs = 0;
+let _maghribAdjustmentMs = 0;
+let _ishaAdjustmentMs = 0;
+let _shadowFactor = 1;
 
 function _computeCore(
   config: ResolvedInput,
   S: Float64Array,
   o: number,
 ): number {
-  // 0. Config cache — skip recomputation if location/method/adjustments unchanged
+  // Recompute location/method-derived constants only when the config changes; they are stable across different dates
   if (
-    config.latitude !== _ccLat ||
-    config.longitude !== _ccLng ||
-    config.elevation !== _ccElev ||
-    config.method.fajr !== _ccFajr ||
-    config.method.isha !== _ccIsha ||
-    config.method.ishaInterval !== _ccIshaInt ||
-    config.madhab !== _ccMadhab ||
-    config.adjustments.fajr !== _ccAdjF ||
-    config.adjustments.sunrise !== _ccAdjSr ||
-    config.adjustments.dhuhr !== _ccAdjD ||
-    config.adjustments.asr !== _ccAdjA ||
-    config.adjustments.maghrib !== _ccAdjM ||
-    config.adjustments.isha !== _ccAdjI
+    config.latitude !== _prevConfigLatitude ||
+    config.longitude !== _prevConfigLongitude ||
+    config.elevation !== _prevConfigElevation ||
+    config.method.fajr !== _prevConfigFajrAngle ||
+    config.method.isha !== _prevConfigIshaAngle ||
+    config.method.ishaInterval !== _prevConfigIshaInterval ||
+    config.madhab !== _prevConfigMadhab ||
+    config.adjustments.fajr !== _prevAdjFajr ||
+    config.adjustments.sunrise !== _prevAdjSunrise ||
+    config.adjustments.dhuhr !== _prevAdjDhuhr ||
+    config.adjustments.asr !== _prevAdjAsr ||
+    config.adjustments.maghrib !== _prevAdjMaghrib ||
+    config.adjustments.isha !== _prevAdjIsha
   ) {
-    _ccLat = config.latitude;
-    _ccLng = config.longitude;
-    _ccElev = config.elevation;
-    _ccFajr = config.method.fajr;
-    _ccIsha = config.method.isha;
-    _ccIshaInt = config.method.ishaInterval;
-    _ccMadhab = config.madhab;
-    _ccAdjF = config.adjustments.fajr;
-    _ccAdjSr = config.adjustments.sunrise;
-    _ccAdjD = config.adjustments.dhuhr;
-    _ccAdjA = config.adjustments.asr;
-    _ccAdjM = config.adjustments.maghrib;
-    _ccAdjI = config.adjustments.isha;
+    _prevConfigLatitude = config.latitude;
+    _prevConfigLongitude = config.longitude;
+    _prevConfigElevation = config.elevation;
+    _prevConfigFajrAngle = config.method.fajr;
+    _prevConfigIshaAngle = config.method.isha;
+    _prevConfigIshaInterval = config.method.ishaInterval;
+    _prevConfigMadhab = config.madhab;
+    _prevAdjFajr = config.adjustments.fajr;
+    _prevAdjSunrise = config.adjustments.sunrise;
+    _prevAdjDhuhr = config.adjustments.dhuhr;
+    _prevAdjAsr = config.adjustments.asr;
+    _prevAdjMaghrib = config.adjustments.maghrib;
+    _prevAdjIsha = config.adjustments.isha;
 
-    _sinLat = tSin(config.latitude);
-    _cosLat = tCos(config.latitude);
-    _Lw = -config.longitude;
-    _360cosLat = 360 * _cosLat;
-    _horizonAlt = -(0.8333 + 0.0347 * Math.sqrt(config.elevation));
-    _sinHorizonAlt = tSin(_horizonAlt);
-    _base90Horizon = 90 - _horizonAlt;
-    _fajrAlt = -config.method.fajr;
-    _sinFajrAlt = tSin(_fajrAlt);
-    _base90Fajr = 90 - _fajrAlt;
-    _ishaAlt = -config.method.isha;
-    _sinIshaAlt = tSin(_ishaAlt);
-    _base90Isha = 90 - _ishaAlt;
-    _adjFajrMs = config.adjustments.fajr * MS_PER_MIN;
-    _adjSunriseMs = config.adjustments.sunrise * MS_PER_MIN;
-    _adjDhuhrMs = config.adjustments.dhuhr * MS_PER_MIN;
-    _adjAsrMs = config.adjustments.asr * MS_PER_MIN;
-    _adjMaghribMs = config.adjustments.maghrib * MS_PER_MIN;
-    _adjIshaMs = config.adjustments.isha * MS_PER_MIN;
-    _shadowK = config.madhab === "standard" ? 1 : 2;
+    _sinLatitude = tSin(config.latitude);
+    _cosLatitude = tCos(config.latitude);
+    _longitudeWestDeg = -config.longitude;
+    // 360·cos(lat) is the denominator in all dm (day-fraction correction) formulas
+    _threeSixtyTimesCosLat = 360 * _cosLatitude;
+    // Standard solar horizon dip: −0.8333° for refraction + atmospheric dip, plus elevation correction (0.0347·√h degrees)
+    _horizonAltitudeDeg = -(0.8333 + 0.0347 * Math.sqrt(config.elevation));
+    _sinHorizonAltitude = tSin(_horizonAltitudeDeg);
+    _zenithDistanceHorizonDeg = 90 - _horizonAltitudeDeg;
+    // Fajr/Isha angles are defined as degrees below the horizon, so negate them to get the target altitude
+    _fajrAltitudeDeg = -config.method.fajr;
+    _sinFajrAltitude = tSin(_fajrAltitudeDeg);
+    _zenithDistanceFajrDeg = 90 - _fajrAltitudeDeg;
+    _ishaAltitudeDeg = -config.method.isha;
+    _sinIshaAltitude = tSin(_ishaAltitudeDeg);
+    _zenithDistanceIshaDeg = 90 - _ishaAltitudeDeg;
+    _fajrAdjustmentMs = config.adjustments.fajr * MS_PER_MIN;
+    _sunriseAdjustmentMs = config.adjustments.sunrise * MS_PER_MIN;
+    _dhuhrAdjustmentMs = config.adjustments.dhuhr * MS_PER_MIN;
+    _asrAdjustmentMs = config.adjustments.asr * MS_PER_MIN;
+    _maghribAdjustmentMs = config.adjustments.maghrib * MS_PER_MIN;
+    _ishaAdjustmentMs = config.adjustments.isha * MS_PER_MIN;
+    _shadowFactor = config.madhab === "standard" ? 1 : 2;
   }
 
   // 1. Julian Date + DayConstants cache (location-independent)
-  const julDate = config.date / 86_400_000 + 2440587.5;
-  const dcIdx = ((julDate + 0.5) | 0) & CACHE_MASK;
-  const dcBase = dcIdx * DC_STRIDE;
+  // Convert epoch ms to Julian Date: ms/day + JD at Unix epoch (1970 Jan 1.5)
+  const julianDate = config.date / 86_400_000 + 2440587.5;
+  const dayCacheIndex = ((julianDate + 0.5) | 0) & CACHE_MASK;
+  const dayCacheSlotOffset = dayCacheIndex * DC_STRIDE;
 
-  if (_dcJDs[dcIdx] !== julDate) {
-    const prevSolar = cachedSolarPosition(julDate - 1);
-    const solar = cachedSolarPosition(julDate);
-    const nextSolar = cachedSolarPosition(julDate + 1);
+  if (_dcJDs[dayCacheIndex] !== julianDate) {
+    // Interpolate solar position from three consecutive days (yesterday, today, tomorrow) for the Meeus corrected transit/hour-angle method
+    const prevSolar = cachedSolarPosition(julianDate - 1);
+    const solar = cachedSolarPosition(julianDate);
+    const nextSolar = cachedSolarPosition(julianDate + 1);
 
-    const ca2 = solar.rightAscension;
-    const cd2 = solar.declination;
-    const raA = normalizeDeg(ca2 - prevSolar.rightAscension);
-    const raB = normalizeDeg(nextSolar.rightAscension - ca2);
-    const declA = cd2 - prevSolar.declination;
-    const declB = nextSolar.declination - cd2;
+    const rightAscensionToday = solar.rightAscension;
+    const declinationToday = solar.declination;
+    // First differences of right ascension across the three days; used for quadratic interpolation (Meeus p.24)
+    const rightAscensionDiffPrevToToday = normalizeDeg(
+      rightAscensionToday - prevSolar.rightAscension,
+    );
+    const rightAscensionDiffTodayToNext = normalizeDeg(
+      nextSolar.rightAscension - rightAscensionToday,
+    );
+    const declinationDiffPrevToToday = declinationToday - prevSolar.declination;
+    const declinationDiffTodayToNext = nextSolar.declination - declinationToday;
 
-    _dc[dcBase + DC_THETA0] = solar.apparentSiderealTime;
-    _dc[dcBase + DC_A2] = ca2;
-    _dc[dcBase + DC_D2] = cd2;
-    _dc[dcBase + DC_RA_AB] = raA + raB;
-    _dc[dcBase + DC_RA_C] = raB - raA;
-    _dc[dcBase + DC_DECL_AB] = declA + declB;
-    _dc[dcBase + DC_DECL_C] = declB - declA;
-    _dc[dcBase + DC_SIN_D2] = tSin(cd2);
-    _dc[dcBase + DC_COS_D2] = tCos(cd2);
-    _dc[dcBase + DC_EQT] = solar.eqtMinutes;
-    _dc[dcBase + DC_MIDNIGHT_MS] = (julDate - 2440587.5) * MS_PER_DAY;
+    _dc[dayCacheSlotOffset + DC_GREENWICH_SIDEREAL_TIME] =
+      solar.apparentSiderealTime;
+    _dc[dayCacheSlotOffset + DC_RIGHT_ASCENSION_TODAY] = rightAscensionToday;
+    _dc[dayCacheSlotOffset + DC_DECLINATION_TODAY] = declinationToday;
+    _dc[dayCacheSlotOffset + DC_RA_INTERPOLATION_AB] =
+      rightAscensionDiffPrevToToday + rightAscensionDiffTodayToNext;
+    _dc[dayCacheSlotOffset + DC_RA_INTERPOLATION_C] =
+      rightAscensionDiffTodayToNext - rightAscensionDiffPrevToToday;
+    _dc[dayCacheSlotOffset + DC_DECL_INTERPOLATION_AB] =
+      declinationDiffPrevToToday + declinationDiffTodayToNext;
+    _dc[dayCacheSlotOffset + DC_DECL_INTERPOLATION_C] =
+      declinationDiffTodayToNext - declinationDiffPrevToToday;
+    _dc[dayCacheSlotOffset + DC_SIN_DECLINATION_TODAY] = tSin(declinationToday);
+    _dc[dayCacheSlotOffset + DC_COS_DECLINATION_TODAY] = tCos(declinationToday);
+    _dc[dayCacheSlotOffset + DC_EQUATION_OF_TIME] = solar.eqtMinutes;
+    _dc[dayCacheSlotOffset + DC_UTC_MIDNIGHT_MS] =
+      (julianDate - 2440587.5) * MS_PER_DAY;
 
-    _dcJDs[dcIdx] = julDate;
+    _dcJDs[dayCacheIndex] = julianDate;
   }
 
   // 2. Load day constants from cache
-  const Theta0 = _dc[dcBase + DC_THETA0]!;
-  const a2 = _dc[dcBase + DC_A2]!;
-  const d2 = _dc[dcBase + DC_D2]!;
-  const raAB = _dc[dcBase + DC_RA_AB]!;
-  const raC = _dc[dcBase + DC_RA_C]!;
-  const declAB = _dc[dcBase + DC_DECL_AB]!;
-  const declC = _dc[dcBase + DC_DECL_C]!;
-  const dateUtcMidnightMs = _dc[dcBase + DC_MIDNIGHT_MS]!;
+  const greenwichSiderealTimeDeg =
+    _dc[dayCacheSlotOffset + DC_GREENWICH_SIDEREAL_TIME]!;
+  const rightAscensionToday =
+    _dc[dayCacheSlotOffset + DC_RIGHT_ASCENSION_TODAY]!;
+  const declinationToday = _dc[dayCacheSlotOffset + DC_DECLINATION_TODAY]!;
+  const rightAscensionInterpolationSum =
+    _dc[dayCacheSlotOffset + DC_RA_INTERPOLATION_AB]!;
+  const rightAscensionInterpolationDiff =
+    _dc[dayCacheSlotOffset + DC_RA_INTERPOLATION_C]!;
+  const declinationInterpolationSum =
+    _dc[dayCacheSlotOffset + DC_DECL_INTERPOLATION_AB]!;
+  const declinationInterpolationDiff =
+    _dc[dayCacheSlotOffset + DC_DECL_INTERPOLATION_C]!;
+  const utcMidnightMs = _dc[dayCacheSlotOffset + DC_UTC_MIDNIGHT_MS]!;
 
   // Location-dependent — copy cached module vars to register-locals
-  const sinLat = _sinLat;
-  const cosLat = _cosLat;
-  const Lw = _Lw;
-  const c360cosLat = _360cosLat;
-  const horizonAlt = _horizonAlt;
-  const sinHorizonAlt = _sinHorizonAlt;
-  const base90Horizon = _base90Horizon;
-  const fajrAlt = _fajrAlt;
-  const sinFajrAlt = _sinFajrAlt;
-  const base90Fajr = _base90Fajr;
-  const ishaAlt = _ishaAlt;
-  const sinIshaAlt = _sinIshaAlt;
-  const base90Isha = _base90Isha;
-  const adjFajrMs = _adjFajrMs;
-  const adjSunriseMs = _adjSunriseMs;
-  const adjDhuhrMs = _adjDhuhrMs;
-  const adjAsrMs = _adjAsrMs;
-  const adjMaghribMs = _adjMaghribMs;
-  const adjIshaMs = _adjIshaMs;
-  const shadowK = _shadowK;
-  const sinLatSinD2 = sinLat * _dc[dcBase + DC_SIN_D2]!;
-  const cosLatCosD2 = cosLat * _dc[dcBase + DC_COS_D2]!;
+  const sinLatitude = _sinLatitude;
+  const cosLatitude = _cosLatitude;
+  const longitudeWestDeg = _longitudeWestDeg;
+  // 360·cos(lat): denominator in all dm (day-fraction correction) formulas
+  const dmDenominatorFactor = _threeSixtyTimesCosLat;
+  const horizonAlt = _horizonAltitudeDeg;
+  const sinHorizonAlt = _sinHorizonAltitude;
+  const base90Horizon = _zenithDistanceHorizonDeg;
+  const fajrAlt = _fajrAltitudeDeg;
+  const sinFajrAlt = _sinFajrAltitude;
+  const base90Fajr = _zenithDistanceFajrDeg;
+  const ishaAlt = _ishaAltitudeDeg;
+  const sinIshaAlt = _sinIshaAltitude;
+  const base90Isha = _zenithDistanceIshaDeg;
+  const adjFajrMs = _fajrAdjustmentMs;
+  const adjSunriseMs = _sunriseAdjustmentMs;
+  const adjDhuhrMs = _dhuhrAdjustmentMs;
+  const adjAsrMs = _asrAdjustmentMs;
+  const adjMaghribMs = _maghribAdjustmentMs;
+  const adjIshaMs = _ishaAdjustmentMs;
+  const shadowK = _shadowFactor;
+  // Precompute shared products used in all five cos(H₀) formulas to avoid repeating the multiplications
+  const sinLatTimesSinDeclination =
+    sinLatitude * _dc[dayCacheSlotOffset + DC_SIN_DECLINATION_TODAY]!;
+  const cosLatTimesCosDeclination =
+    cosLatitude * _dc[dayCacheSlotOffset + DC_COS_DECLINATION_TODAY]!;
 
-  // 3. Transit (Dhuhr) — predicted branches for normalization
-  const m0Raw = (a2 + Lw - Theta0) * INV360;
-  const m0 = m0Raw - Math.floor(m0Raw);
+  // 3. Transit (Dhuhr) — Approximate transit (solar noon) as a fraction of the day, then refine with one corrective iteration (Meeus p.102)
+  // Raw fraction before normalization; may be outside [0,1] due to the sign of the RA−sidereal difference
+  const approximateTransitRaw =
+    (rightAscensionToday + longitudeWestDeg - greenwichSiderealTimeDeg) *
+    INV360;
+  const approximateTransitFraction =
+    approximateTransitRaw - Math.floor(approximateTransitRaw);
 
-  let transitTheta = Theta0 + 360.985647 * m0;
+  let transitTheta =
+    greenwichSiderealTimeDeg + 360.985647 * approximateTransitFraction;
   if (transitTheta >= 360) transitTheta -= 360;
   if (transitTheta >= 360) transitTheta -= 360;
-  let transitA = a2 + m0 * 0.5 * (raAB + m0 * raC);
+  let transitA =
+    rightAscensionToday +
+    approximateTransitFraction *
+      0.5 *
+      (rightAscensionInterpolationSum +
+        approximateTransitFraction * rightAscensionInterpolationDiff);
   if (transitA >= 360) transitA -= 360;
   else if (transitA < 0) transitA += 360;
-  const rawTransitH = transitTheta - Lw - transitA;
-  const transitH =
+  const rawTransitH = transitTheta - longitudeWestDeg - transitA;
+  // Local hour angle at transit must be near zero; quadrant-shift to [−180,180] to get the small correction dm
+  const transitHourAngleOffset =
     rawTransitH >= -180 && rawTransitH <= 180
       ? rawTransitH
       : rawTransitH - 360 * Math.round(rawTransitH * INV360);
-  const transitUtcH = (m0 - transitH * INV360) * 24;
+  const solarNoonUtcHours =
+    (approximateTransitFraction - transitHourAngleOffset * INV360) * 24;
 
   // 4. Asr altitude (date-dependent — can't cache)
-  const transitFrac = transitUtcH / 24;
-  const declAtTransit = d2 + transitFrac * 0.5 * (declAB + transitFrac * declC);
-  const _asrDiff = Math.abs(config.latitude - declAtTransit);
-  const asrAlt = tAtan(1 / (shadowK + tSin(_asrDiff) / tCos(_asrDiff)));
-  const sinAsrAlt = tSin(asrAlt);
-  const base90Asr = 90 - asrAlt;
+  const solarNoonFraction = solarNoonUtcHours / 24;
+  // Asr shadow angle depends on declination at solar noon; interpolate to the transit time within the day
+  const declinationAtSolarNoon =
+    declinationToday +
+    solarNoonFraction *
+      0.5 *
+      (declinationInterpolationSum +
+        solarNoonFraction * declinationInterpolationDiff);
+  // Asr altitude = arctan(1 / (shadowFactor + tan(|lat − decl|))); the shadow factor is 1 (standard) or 2 (Hanafi)
+  const latitudeMinusDeclinationDeg = Math.abs(
+    config.latitude - declinationAtSolarNoon,
+  );
+  const asrAltitudeDeg = tAtan(
+    1 /
+      (shadowK +
+        tSin(latitudeMinusDeclinationDeg) / tCos(latitudeMinusDeclinationDeg)),
+  );
+  const sinAsrAltitude = tSin(asrAltitudeDeg);
+  const zenithDistanceAsrDeg = 90 - asrAltitudeDeg;
 
-  let uf = 0;
+  let undefinedPrayersBitmask = 0;
 
   // --- Fajr (before transit, slot 0) ---
   {
-    const cosH0 = (sinFajrAlt - sinLatSinD2) / cosLatCosD2;
-    S[o + 6] = cosH0;
+    // cos(H₀) for Fajr: apply the hour-angle formula for Fajr's target altitude
+    const cosHourAngleFajr =
+      (sinFajrAlt - sinLatTimesSinDeclination) / cosLatTimesCosDeclination;
+    S[o + 6] = cosHourAngleFajr;
     S[o + 18] = fajrAlt;
-    if (cosH0 < NEG_COS_BOUND || cosH0 > POS_COS_BOUND) {
-      uf |= 1;
+    if (cosHourAngleFajr < NEG_COS_BOUND || cosHourAngleFajr > POS_COS_BOUND) {
+      undefinedPrayersBitmask |= 1;
     } else {
-      S[o + 12] = +(cosH0 > 1 || cosH0 < -1);
-      const H0 = tAcos(cosH0);
-      const m = m0 - H0 * INV360;
-      let _t = Theta0 + 360.985647 * m;
+      S[o + 12] = +(cosHourAngleFajr > 1 || cosHourAngleFajr < -1);
+      const hourAngleFajrDeg = tAcos(cosHourAngleFajr);
+      // Day fraction for Fajr: transit − H₀/360 (AM event, subtract)
+      const fajrDayFraction =
+        approximateTransitFraction - hourAngleFajrDeg * INV360;
+      let _t = greenwichSiderealTimeDeg + 360.985647 * fajrDayFraction;
       if (_t >= 360) _t -= 360;
       if (_t >= 360) _t -= 360;
-      const _hn = m * 0.5;
-      let _a = a2 + _hn * (raAB + m * raC);
+      const _hn = fajrDayFraction * 0.5;
+      let _a =
+        rightAscensionToday +
+        _hn *
+          (rightAscensionInterpolationSum +
+            fajrDayFraction * rightAscensionInterpolationDiff);
       if (_a >= 360) _a -= 360;
       else if (_a < 0) _a += 360;
-      const _d = d2 + _hn * (declAB + m * declC);
-      const _H = _t - Lw - _a;
+      const _d =
+        declinationToday +
+        _hn *
+          (declinationInterpolationSum +
+            fajrDayFraction * declinationInterpolationDiff);
+      const _H = _t - longitudeWestDeg - _a;
       const _sd = tSin(_d);
       const _cd = tCos(_d);
-      const dm =
-        (base90Fajr - tAcos(sinLat * _sd + cosLat * _cd * tCos(_H))) /
-        (c360cosLat * _cd * tSin(_H));
-      S[o + 0] = dateUtcMidnightMs + (m + dm) * MS_PER_DAY + adjFajrMs;
+      // One-iteration refinement: interpolate RA/declination to the trial time, recompute altitude, apply altitude residual as dm
+      const fajrCorrection =
+        (base90Fajr - tAcos(sinLatitude * _sd + cosLatitude * _cd * tCos(_H))) /
+        (dmDenominatorFactor * _cd * tSin(_H));
+      S[o + 0] =
+        utcMidnightMs +
+        (fajrDayFraction + fajrCorrection) * MS_PER_DAY +
+        adjFajrMs;
     }
   }
 
   // --- Sunrise (slot 1) & Sunset/Maghrib (slot 4) ---
   {
-    const cosH0 = (sinHorizonAlt - sinLatSinD2) / cosLatCosD2;
-    S[o + 7] = cosH0;
-    S[o + 10] = cosH0;
+    // cos(H₀) for Sunrise/Sunset: apply the hour-angle formula for the horizon altitude
+    const cosHourAngleHorizon =
+      (sinHorizonAlt - sinLatTimesSinDeclination) / cosLatTimesCosDeclination;
+    S[o + 7] = cosHourAngleHorizon;
+    S[o + 10] = cosHourAngleHorizon;
     S[o + 19] = horizonAlt;
     S[o + 22] = horizonAlt;
-    if (cosH0 < NEG_COS_BOUND || cosH0 > POS_COS_BOUND) {
-      uf |= 10; // bits 1 + 3
+    if (
+      cosHourAngleHorizon < NEG_COS_BOUND ||
+      cosHourAngleHorizon > POS_COS_BOUND
+    ) {
+      undefinedPrayersBitmask |= 10; // bits 1 + 3
     } else {
-      const cf = +(cosH0 > 1 || cosH0 < -1);
-      S[o + 13] = cf;
-      S[o + 16] = cf;
-      const H0 = tAcos(cosH0);
+      const clampedFlag = +(
+        cosHourAngleHorizon > 1 || cosHourAngleHorizon < -1
+      );
+      S[o + 13] = clampedFlag;
+      S[o + 16] = clampedFlag;
+      const hourAngleHorizonDeg = tAcos(cosHourAngleHorizon);
 
-      // Sunrise
-      const mR = m0 - H0 * INV360;
+      // Sunrise: transit − H₀/360
+      const sunriseDayFraction =
+        approximateTransitFraction - hourAngleHorizonDeg * INV360;
       {
-        let _t = Theta0 + 360.985647 * mR;
+        let _t = greenwichSiderealTimeDeg + 360.985647 * sunriseDayFraction;
         if (_t >= 360) _t -= 360;
         if (_t >= 360) _t -= 360;
-        const _hn = mR * 0.5;
-        let _a = a2 + _hn * (raAB + mR * raC);
+        const _hn = sunriseDayFraction * 0.5;
+        let _a =
+          rightAscensionToday +
+          _hn *
+            (rightAscensionInterpolationSum +
+              sunriseDayFraction * rightAscensionInterpolationDiff);
         if (_a >= 360) _a -= 360;
         else if (_a < 0) _a += 360;
-        const _d = d2 + _hn * (declAB + mR * declC);
-        const _H = _t - Lw - _a;
+        const _d =
+          declinationToday +
+          _hn *
+            (declinationInterpolationSum +
+              sunriseDayFraction * declinationInterpolationDiff);
+        const _H = _t - longitudeWestDeg - _a;
         const _sd = tSin(_d);
         const _cd = tCos(_d);
-        const dm =
-          (base90Horizon - tAcos(sinLat * _sd + cosLat * _cd * tCos(_H))) /
-          (c360cosLat * _cd * tSin(_H));
-        S[o + 1] = dateUtcMidnightMs + (mR + dm) * MS_PER_DAY + adjSunriseMs;
+        // One-iteration refinement for sunrise
+        const sunriseCorrection =
+          (base90Horizon -
+            tAcos(sinLatitude * _sd + cosLatitude * _cd * tCos(_H))) /
+          (dmDenominatorFactor * _cd * tSin(_H));
+        S[o + 1] =
+          utcMidnightMs +
+          (sunriseDayFraction + sunriseCorrection) * MS_PER_DAY +
+          adjSunriseMs;
       }
 
-      // Sunset → slot 28 (raw), Maghrib → slot 4 (sunset + adjustment)
-      const mS = m0 + H0 * INV360;
+      // Sunset → slot 28 (raw, before maghrib adjustment), Maghrib → slot 4 (sunset + adjustment)
+      const sunsetDayFraction =
+        approximateTransitFraction + hourAngleHorizonDeg * INV360;
       {
-        let _t = Theta0 + 360.985647 * mS;
+        let _t = greenwichSiderealTimeDeg + 360.985647 * sunsetDayFraction;
         if (_t >= 360) _t -= 360;
         if (_t >= 360) _t -= 360;
-        const _hn = mS * 0.5;
-        let _a = a2 + _hn * (raAB + mS * raC);
+        const _hn = sunsetDayFraction * 0.5;
+        let _a =
+          rightAscensionToday +
+          _hn *
+            (rightAscensionInterpolationSum +
+              sunsetDayFraction * rightAscensionInterpolationDiff);
         if (_a >= 360) _a -= 360;
         else if (_a < 0) _a += 360;
-        const _d = d2 + _hn * (declAB + mS * declC);
-        const _H = _t - Lw - _a;
+        const _d =
+          declinationToday +
+          _hn *
+            (declinationInterpolationSum +
+              sunsetDayFraction * declinationInterpolationDiff);
+        const _H = _t - longitudeWestDeg - _a;
         const _sd = tSin(_d);
         const _cd = tCos(_d);
-        const dm =
-          (base90Horizon - tAcos(sinLat * _sd + cosLat * _cd * tCos(_H))) /
-          (c360cosLat * _cd * tSin(_H));
-        const sunsetMs = dateUtcMidnightMs + (mS + dm) * MS_PER_DAY;
-        S[o + 28] = sunsetMs;
-        S[o + 4] = sunsetMs + adjMaghribMs;
+        // One-iteration refinement for sunset
+        const sunsetCorrection =
+          (base90Horizon -
+            tAcos(sinLatitude * _sd + cosLatitude * _cd * tCos(_H))) /
+          (dmDenominatorFactor * _cd * tSin(_H));
+        const rawSunsetMs =
+          utcMidnightMs + (sunsetDayFraction + sunsetCorrection) * MS_PER_DAY;
+        S[o + 28] = rawSunsetMs;
+        S[o + 4] = rawSunsetMs + adjMaghribMs;
       }
     }
   }
 
   // --- Dhuhr (slot 2, always valid) ---
-  S[o + 2] = dateUtcMidnightMs + transitUtcH * 3_600_000 + adjDhuhrMs;
+  S[o + 2] = utcMidnightMs + solarNoonUtcHours * 3_600_000 + adjDhuhrMs;
   S[o + 8] = NaN; // cosOmega = null
   S[o + 14] = 0; // cf = 0 (no clamping, no fallback)
   S[o + 20] = 90;
 
   // --- Asr (slot 3) ---
   {
-    const cosH0 = (sinAsrAlt - sinLatSinD2) / cosLatCosD2;
-    S[o + 9] = cosH0;
-    S[o + 21] = asrAlt;
-    if (cosH0 < NEG_COS_BOUND || cosH0 > POS_COS_BOUND) {
-      uf |= 4;
+    // cos(H₀) for Asr: apply the hour-angle formula for Asr's target altitude
+    const cosHourAngleAsr =
+      (sinAsrAltitude - sinLatTimesSinDeclination) / cosLatTimesCosDeclination;
+    S[o + 9] = cosHourAngleAsr;
+    S[o + 21] = asrAltitudeDeg;
+    if (cosHourAngleAsr < NEG_COS_BOUND || cosHourAngleAsr > POS_COS_BOUND) {
+      undefinedPrayersBitmask |= 4;
     } else {
-      S[o + 15] = +(cosH0 > 1 || cosH0 < -1);
-      const H0 = tAcos(cosH0);
-      const m = m0 + H0 * INV360;
-      let _t = Theta0 + 360.985647 * m;
+      S[o + 15] = +(cosHourAngleAsr > 1 || cosHourAngleAsr < -1);
+      const hourAngleAsrDeg = tAcos(cosHourAngleAsr);
+      // Day fraction for Asr: transit + H₀/360 (PM event, add)
+      const asrDayFraction =
+        approximateTransitFraction + hourAngleAsrDeg * INV360;
+      let _t = greenwichSiderealTimeDeg + 360.985647 * asrDayFraction;
       if (_t >= 360) _t -= 360;
       if (_t >= 360) _t -= 360;
-      const _hn = m * 0.5;
-      let _a = a2 + _hn * (raAB + m * raC);
+      const _hn = asrDayFraction * 0.5;
+      let _a =
+        rightAscensionToday +
+        _hn *
+          (rightAscensionInterpolationSum +
+            asrDayFraction * rightAscensionInterpolationDiff);
       if (_a >= 360) _a -= 360;
       else if (_a < 0) _a += 360;
-      const _d = d2 + _hn * (declAB + m * declC);
-      const _H = _t - Lw - _a;
+      const _d =
+        declinationToday +
+        _hn *
+          (declinationInterpolationSum +
+            asrDayFraction * declinationInterpolationDiff);
+      const _H = _t - longitudeWestDeg - _a;
       const _sd = tSin(_d);
       const _cd = tCos(_d);
-      const dm =
-        (base90Asr - tAcos(sinLat * _sd + cosLat * _cd * tCos(_H))) /
-        (c360cosLat * _cd * tSin(_H));
-      S[o + 3] = dateUtcMidnightMs + (m + dm) * MS_PER_DAY + adjAsrMs;
+      // One-iteration refinement for Asr
+      const asrCorrection =
+        (zenithDistanceAsrDeg -
+          tAcos(sinLatitude * _sd + cosLatitude * _cd * tCos(_H))) /
+        (dmDenominatorFactor * _cd * tSin(_H));
+      S[o + 3] =
+        utcMidnightMs +
+        (asrDayFraction + asrCorrection) * MS_PER_DAY +
+        adjAsrMs;
     }
   }
 
   // --- Isha (slot 5) ---
-  if (config.method.ishaInterval != null && !(uf & 8)) {
+  if (config.method.ishaInterval != null && !(undefinedPrayersBitmask & 8)) {
     S[o + 5] =
       S[o + 4]! +
       (config.method.ishaInterval + config.adjustments.isha) * MS_PER_MIN;
@@ -722,85 +890,107 @@ function _computeCore(
     S[o + 17] = 2; // cf bit 1 = interval fallback
     S[o + 23] = 0; // targetAlt not meaningful for interval
   } else {
-    const cosH0 = (sinIshaAlt - sinLatSinD2) / cosLatCosD2;
-    S[o + 11] = cosH0;
+    // cos(H₀) for Isha: apply the hour-angle formula for Isha's target altitude
+    const cosHourAngleIsha =
+      (sinIshaAlt - sinLatTimesSinDeclination) / cosLatTimesCosDeclination;
+    S[o + 11] = cosHourAngleIsha;
     S[o + 23] = ishaAlt;
-    if (cosH0 < NEG_COS_BOUND || cosH0 > POS_COS_BOUND) {
-      uf |= 16;
+    if (cosHourAngleIsha < NEG_COS_BOUND || cosHourAngleIsha > POS_COS_BOUND) {
+      undefinedPrayersBitmask |= 16;
     } else {
-      S[o + 17] = +(cosH0 > 1 || cosH0 < -1);
-      const H0 = tAcos(cosH0);
-      const m = m0 + H0 * INV360;
-      let _t = Theta0 + 360.985647 * m;
+      S[o + 17] = +(cosHourAngleIsha > 1 || cosHourAngleIsha < -1);
+      const hourAngleIshaDeg = tAcos(cosHourAngleIsha);
+      // Day fraction for Isha: transit + H₀/360 (PM event, add)
+      const ishaDayFraction =
+        approximateTransitFraction + hourAngleIshaDeg * INV360;
+      let _t = greenwichSiderealTimeDeg + 360.985647 * ishaDayFraction;
       if (_t >= 360) _t -= 360;
       if (_t >= 360) _t -= 360;
-      const _hn = m * 0.5;
-      let _a = a2 + _hn * (raAB + m * raC);
+      const _hn = ishaDayFraction * 0.5;
+      let _a =
+        rightAscensionToday +
+        _hn *
+          (rightAscensionInterpolationSum +
+            ishaDayFraction * rightAscensionInterpolationDiff);
       if (_a >= 360) _a -= 360;
       else if (_a < 0) _a += 360;
-      const _d = d2 + _hn * (declAB + m * declC);
-      const _H = _t - Lw - _a;
+      const _d =
+        declinationToday +
+        _hn *
+          (declinationInterpolationSum +
+            ishaDayFraction * declinationInterpolationDiff);
+      const _H = _t - longitudeWestDeg - _a;
       const _sd = tSin(_d);
       const _cd = tCos(_d);
-      const dm =
-        (base90Isha - tAcos(sinLat * _sd + cosLat * _cd * tCos(_H))) /
-        (c360cosLat * _cd * tSin(_H));
-      S[o + 5] = dateUtcMidnightMs + (m + dm) * MS_PER_DAY + adjIshaMs;
+      // One-iteration refinement for Isha
+      const ishaCorrection =
+        (base90Isha - tAcos(sinLatitude * _sd + cosLatitude * _cd * tCos(_H))) /
+        (dmDenominatorFactor * _cd * tSin(_H));
+      S[o + 5] =
+        utcMidnightMs +
+        (ishaDayFraction + ishaCorrection) * MS_PER_DAY +
+        adjIshaMs;
     }
   }
 
-  if (config.highLatRule !== "none" && !(uf & 10)) {
-    if (uf & 17) {
+  // When Fajr or Isha is geometrically undefined (polar latitudes), bound the time using the chosen high-latitude rule
+  if (config.highLatRule !== "none" && !(undefinedPrayersBitmask & 10)) {
+    if (undefinedPrayersBitmask & 17) {
       // fajr (bit 0) or isha (bit 4) undefined
       const sunsetMs = S[o + 28]!;
       const nextSunriseMs = S[o + 1]! + MS_PER_DAY;
+      // Night duration = next sunrise − today's sunset; the fractional portion determines the fallback time
       const nightMs = nextSunriseMs - sunsetMs;
 
       if (nightMs > 0) {
         const rule = config.highLatRule;
-        const cfFlag =
+        const fallbackCfFlag =
           rule === "middle_of_night" ? 4 : rule === "seventh_of_night" ? 8 : 16;
 
-        if (uf & 1) {
-          let fbMs: number;
+        if (undefinedPrayersBitmask & 1) {
+          let fallbackMs: number;
           if (rule === "middle_of_night") {
-            fbMs = sunsetMs + nightMs * 0.5;
+            // Fajr = midpoint of the night (sunset + half night duration)
+            fallbackMs = sunsetMs + nightMs * 0.5;
           } else if (rule === "seventh_of_night") {
-            fbMs = nextSunriseMs - nightMs / 7;
+            // Fajr = last seventh of the night (sunrise − one-seventh of night duration)
+            fallbackMs = nextSunriseMs - nightMs / 7;
           } else {
-            // twilight_angle
-            fbMs = nextSunriseMs - (config.method.fajr / 60) * nightMs;
+            // twilight_angle: Fajr = fraction of night proportional to Fajr angle / 60
+            fallbackMs = nextSunriseMs - (config.method.fajr / 60) * nightMs;
           }
-          S[o + 0] = fbMs + adjFajrMs;
-          S[o + 12] = cfFlag;
-          uf &= ~1;
+          S[o + 0] = fallbackMs + adjFajrMs;
+          S[o + 12] = fallbackCfFlag;
+          undefinedPrayersBitmask &= ~1;
         }
 
-        if (uf & 16) {
-          let fbMs: number;
+        if (undefinedPrayersBitmask & 16) {
+          let fallbackMs: number;
           if (rule === "middle_of_night") {
-            fbMs = sunsetMs + nightMs * 0.5;
+            // Isha = midpoint of the night (sunset + half night duration)
+            fallbackMs = sunsetMs + nightMs * 0.5;
           } else if (rule === "seventh_of_night") {
-            fbMs = sunsetMs + nightMs / 7;
+            // Isha = first seventh of the night (sunset + one-seventh of night duration)
+            fallbackMs = sunsetMs + nightMs / 7;
           } else {
-            // twilight_angle
-            fbMs = sunsetMs + (config.method.isha / 60) * nightMs;
+            // twilight_angle: Isha = fraction of night proportional to Isha angle / 60
+            fallbackMs = sunsetMs + (config.method.isha / 60) * nightMs;
           }
-          S[o + 5] = fbMs + adjIshaMs;
-          S[o + 17] = cfFlag;
-          uf &= ~16;
+          S[o + 5] = fallbackMs + adjIshaMs;
+          S[o + 17] = fallbackCfFlag;
+          undefinedPrayersBitmask &= ~16;
         }
       }
     }
   }
 
   // Meta values
-  S[o + 24] = d2;
-  S[o + 25] = _dc[dcBase + DC_EQT]!;
-  S[o + 26] = dateUtcMidnightMs + transitUtcH * 3_600_000;
-  S[o + 27] = julDate;
+  S[o + 24] = declinationToday;
+  S[o + 25] = _dc[dayCacheSlotOffset + DC_EQUATION_OF_TIME]!;
+  S[o + 26] = utcMidnightMs + solarNoonUtcHours * 3_600_000;
+  S[o + 27] = julianDate;
 
-  return uf;
+  return undefinedPrayersBitmask;
 }
 
 export function computePrayerTimes(config: PrayerTimeInput): PrayerTimesOutput {

@@ -42,210 +42,283 @@ export function toJulianCentury(julianDate: number): number {
 }
 
 /** Mean lunar longitude (Meeus p.144). */
-export function meanLunarLongitude(T: number): number {
-  return normalizeDeg(218.3165 + 481267.8813 * T);
+export function meanLunarLongitude(julianCentury: number): number {
+  return normalizeDeg(218.3165 + 481267.8813 * julianCentury);
 }
 
 /** Longitude of the ascending lunar node (Meeus p.144). */
-export function ascendingLunarNodeLongitude(T: number): number {
+export function ascendingLunarNodeLongitude(julianCentury: number): number {
   return normalizeDeg(
-    125.04452 - 1934.136261 * T + 0.0020708 * T * T + (T * T * T) / 450000,
+    125.04452 -
+      1934.136261 * julianCentury +
+      0.0020708 * julianCentury * julianCentury +
+      (julianCentury * julianCentury * julianCentury) / 450000,
   );
 }
 
 /** Nutation in longitude ΔΨ (degrees) — Meeus p.144 low-precision. */
 export function nutationInLongitude(
-  L0: number,
-  Lp: number,
-  Omega: number,
+  meanSolarLongitudeDeg: number,
+  meanLunarLongitudeDeg: number,
+  lunarAscendingNodeDeg: number,
 ): number {
-  const OmegaRad = Omega * DEG2RAD;
+  const lunarNodeRad = lunarAscendingNodeDeg * DEG2RAD;
   return (
-    (-17.2 / 3600) * Math.sin(OmegaRad) -
-    (1.32 / 3600) * Math.sin(2 * L0 * DEG2RAD) -
-    (0.23 / 3600) * Math.sin(2 * Lp * DEG2RAD) +
-    (0.21 / 3600) * Math.sin(2 * OmegaRad)
+    (-17.2 / 3600) * Math.sin(lunarNodeRad) -
+    (1.32 / 3600) * Math.sin(2 * meanSolarLongitudeDeg * DEG2RAD) -
+    (0.23 / 3600) * Math.sin(2 * meanLunarLongitudeDeg * DEG2RAD) +
+    (0.21 / 3600) * Math.sin(2 * lunarNodeRad)
   );
 }
 
 /** Nutation in obliquity Δε (degrees) — Meeus p.144 low-precision. */
 export function nutationInObliquity(
-  L0: number,
-  Lp: number,
-  Omega: number,
+  meanSolarLongitudeDeg: number,
+  meanLunarLongitudeDeg: number,
+  lunarAscendingNodeDeg: number,
 ): number {
-  const OmegaRad = Omega * DEG2RAD;
+  const lunarNodeRad = lunarAscendingNodeDeg * DEG2RAD;
   return (
-    (9.2 / 3600) * Math.cos(OmegaRad) +
-    (0.57 / 3600) * Math.cos(2 * L0 * DEG2RAD) +
-    (0.1 / 3600) * Math.cos(2 * Lp * DEG2RAD) -
-    (0.09 / 3600) * Math.cos(2 * OmegaRad)
+    (9.2 / 3600) * Math.cos(lunarNodeRad) +
+    (0.57 / 3600) * Math.cos(2 * meanSolarLongitudeDeg * DEG2RAD) +
+    (0.1 / 3600) * Math.cos(2 * meanLunarLongitudeDeg * DEG2RAD) -
+    (0.09 / 3600) * Math.cos(2 * lunarNodeRad)
   );
 }
 
 /** Mean sidereal time at Greenwich (degrees) — Meeus p.88. */
-export function meanSiderealTime(T: number): number {
-  const JD = T * 36525 + 2451545.0;
+export function meanSiderealTime(julianCentury: number): number {
+  const julianDate = julianCentury * 36525 + 2451545.0;
   return normalizeDeg(
     280.46061837 +
-      360.98564736629 * (JD - 2451545) +
-      0.000387933 * T * T -
-      (T * T * T) / 38710000,
+      360.98564736629 * (julianDate - 2451545) +
+      0.000387933 * julianCentury * julianCentury -
+      (julianCentury * julianCentury * julianCentury) / 38710000,
   );
 }
 
 /** Geometric mean longitude of the sun (degrees) — Meeus p.163. */
-export function meanSolarLongitude(T: number): number {
-  return normalizeDeg(280.4664567 + 36000.76983 * T + 0.0003032 * T * T);
+export function meanSolarLongitude(julianCentury: number): number {
+  return normalizeDeg(
+    280.4664567 +
+      36000.76983 * julianCentury +
+      0.0003032 * julianCentury * julianCentury,
+  );
 }
 
 /** Mean anomaly of the sun (degrees) — Meeus p.163. */
-export function meanSolarAnomaly(T: number): number {
-  return normalizeDeg(357.52911 + 35999.05029 * T - 0.0001537 * T * T);
+export function meanSolarAnomaly(julianCentury: number): number {
+  return normalizeDeg(
+    357.52911 +
+      35999.05029 * julianCentury -
+      0.0001537 * julianCentury * julianCentury,
+  );
 }
 
 /** Sun's equation of the center (degrees) — Meeus p.164. */
-export function solarEquationOfTheCenter(T: number, M: number): number {
-  const MRad = M * DEG2RAD;
-  const sinM = Math.sin(MRad);
+export function solarEquationOfTheCenter(
+  julianCentury: number,
+  meanAnomalyDeg: number,
+): number {
+  const meanAnomalyRad = meanAnomalyDeg * DEG2RAD;
+  const sinMeanAnomaly = Math.sin(meanAnomalyRad);
   return (
-    (1.914602 - 0.004817 * T - 0.000014 * T * T) * sinM +
-    (0.019993 - 0.000101 * T) * Math.sin(2 * MRad) +
-    0.000289 * Math.sin(3 * MRad)
+    (1.914602 -
+      0.004817 * julianCentury -
+      0.000014 * julianCentury * julianCentury) *
+      sinMeanAnomaly +
+    (0.019993 - 0.000101 * julianCentury) * Math.sin(2 * meanAnomalyRad) +
+    0.000289 * Math.sin(3 * meanAnomalyRad)
   );
 }
 
 /** Apparent solar longitude (degrees) — Meeus p.164. */
-export function apparentSolarLongitude(T: number, L0: number): number {
-  const M = meanSolarAnomaly(T);
-  const C = solarEquationOfTheCenter(T, M);
-  const Ltrue = normalizeDeg(L0 + C);
-  const omega = 125.04 - 1934.136 * T;
-  return Ltrue - 0.00569 - 0.00478 * sinDeg(omega);
+export function apparentSolarLongitude(
+  julianCentury: number,
+  meanSolarLongitudeDeg: number,
+): number {
+  const meanAnomalyDeg = meanSolarAnomaly(julianCentury);
+  const equationOfCenterDeg = solarEquationOfTheCenter(
+    julianCentury,
+    meanAnomalyDeg,
+  );
+  // True geometric longitude = mean longitude + equation of center
+  const trueSolarLongitudeDeg = normalizeDeg(
+    meanSolarLongitudeDeg + equationOfCenterDeg,
+  );
+  // Apparent longitude accounts for nutation (ΔΨ) and aberration (the −0.00569 − 0.00478·sin(Ω) correction)
+  const moonAscendingNodeLongitudeDeg = 125.04 - 1934.136 * julianCentury;
+  return (
+    trueSolarLongitudeDeg -
+    0.00569 -
+    0.00478 * sinDeg(moonAscendingNodeLongitudeDeg)
+  );
 }
 
 /** Mean obliquity of the ecliptic (degrees) — Meeus p.147. */
-export function meanObliquityOfTheEcliptic(T: number): number {
+export function meanObliquityOfTheEcliptic(julianCentury: number): number {
   return (
     23.439291 -
-    0.013004167 * T -
-    0.0000001639 * T * T +
-    0.0000005036 * T * T * T
+    0.013004167 * julianCentury -
+    0.0000001639 * julianCentury * julianCentury +
+    0.0000005036 * julianCentury * julianCentury * julianCentury
   );
 }
 
 /** Apparent obliquity of the ecliptic (degrees) — Meeus p.165.
  *  Uses simplified 0.00256·cos(Ω) correction. */
 export function apparentObliquityOfTheEcliptic(
-  T: number,
-  eps0: number,
+  julianCentury: number,
+  meanObliquityDeg: number,
 ): number {
-  const O = 125.04 - 1934.136 * T;
-  return eps0 + 0.00256 * cosDeg(O);
+  const O = 125.04 - 1934.136 * julianCentury;
+  return meanObliquityDeg + 0.00256 * cosDeg(O);
 }
 
 /** Full Meeus algorithm — returns declination, RA, sidereal time, etc. */
 export function solarPosition(julianDate: number): SolarPosition {
-  const T = toJulianCentury(julianDate);
-  const T2 = T * T;
+  // Julian centuries elapsed since J2000.0 epoch; Meeus uses this as the independent variable for all solar series
+  const julianCentury = toJulianCentury(julianDate);
+  const julianCenturySquared = julianCentury * julianCentury;
 
-  // Geometric mean longitude (degrees)
-  const L0 = normalizeDeg(280.4664567 + 36000.76983 * T + 0.0003032 * T2);
-  // Mean anomaly (degrees)
-  const M = normalizeDeg(357.52911 + 35999.05029 * T - 0.0001537 * T2);
-  // Orbital eccentricity
-  const eOrb = 0.016708634 - 0.000042037 * T - 0.0000001267 * T2;
+  // Geometric mean longitude of the sun, before nutation and aberration corrections (Meeus p.163)
+  const meanSolarLongitudeDeg = normalizeDeg(
+    280.4664567 +
+      36000.76983 * julianCentury +
+      0.0003032 * julianCenturySquared,
+  );
+  // Angular distance the sun has traveled from perihelion; drives the equation of the center
+  const meanAnomalyDeg = normalizeDeg(
+    357.52911 + 35999.05029 * julianCentury - 0.0001537 * julianCenturySquared,
+  );
+  // Orbital eccentricity of Earth's ellipse around the Sun; slowly decreasing over centuries
+  const orbitalEccentricity =
+    0.016708634 -
+    0.000042037 * julianCentury -
+    0.0000001267 * julianCenturySquared;
 
-  // Equation of the center (inline for shared MRad/sinM)
-  const MRad = M * DEG2RAD;
-  const sinM = Math.sin(MRad);
-  const cosM = Math.cos(MRad);
-  const sin2M = 2 * sinM * cosM; // sin(2M) via double-angle
-  const C =
-    (1.914602 - 0.004817 * T - 0.000014 * T2) * sinM +
-    (0.019993 - 0.000101 * T) * sin2M +
-    0.000289 * (3 * sinM - 4 * sinM * sinM * sinM); // sin(3M) = 3sinM - 4sin³M
+  // Equation of the center (inline for shared meanAnomalyRad/sinMeanAnomaly)
+  const meanAnomalyRad = meanAnomalyDeg * DEG2RAD;
+  const sinMeanAnomaly = Math.sin(meanAnomalyRad);
+  const cosMeanAnomaly = Math.cos(meanAnomalyRad);
+  const sinTwiceMeanAnomaly = 2 * sinMeanAnomaly * cosMeanAnomaly; // sin(2M) via double-angle
+  // Difference between the sun's true anomaly and mean anomaly; converts uniform orbital motion to actual elliptical motion
+  const equationOfCenterDeg =
+    (1.914602 - 0.004817 * julianCentury - 0.000014 * julianCenturySquared) *
+      sinMeanAnomaly +
+    (0.019993 - 0.000101 * julianCentury) * sinTwiceMeanAnomaly +
+    0.000289 *
+      (3 * sinMeanAnomaly -
+        4 * sinMeanAnomaly * sinMeanAnomaly * sinMeanAnomaly); // sin(3M) = 3sinM - 4sin³M
 
-  // Apparent longitude
-  const Ltrue = normalizeDeg(L0 + C);
-  const omega = 125.04 - 1934.136 * T;
-  const lambda = Ltrue - 0.00569 - 0.00478 * Math.sin(omega * DEG2RAD);
+  // True geometric longitude = mean longitude + equation of center
+  const trueSolarLongitudeDeg = normalizeDeg(
+    meanSolarLongitudeDeg + equationOfCenterDeg,
+  );
+  // Apparent longitude accounts for nutation (ΔΨ) and aberration (the −0.00569 − 0.00478·sin(Ω) correction)
+  const moonAscendingNodeLongitudeDeg = 125.04 - 1934.136 * julianCentury;
+  const apparentSolarLongitudeDeg =
+    trueSolarLongitudeDeg -
+    0.00569 -
+    0.00478 * Math.sin(moonAscendingNodeLongitudeDeg * DEG2RAD);
 
-  // Obliquity (Meeus p.147)
-  const T3 = T2 * T;
-  const eps0 =
-    23.439291 - 0.013004167 * T - 0.0000001639 * T2 + 0.0000005036 * T3;
+  // Tilt of Earth's rotational axis relative to the ecliptic plane; slowly decreasing over centuries
+  const julianCenturyCubed = julianCenturySquared * julianCentury;
+  const meanObliquityDeg =
+    23.439291 -
+    0.013004167 * julianCentury -
+    0.0000001639 * julianCenturySquared +
+    0.0000005036 * julianCenturyCubed;
 
-  // Nutation (inline to share trig values between dPsi/dEpsilon and EoT)
-  const Lp = 218.3165 + 481267.8813 * T; // skip normalization — only used in sin/cos
-  const Omega = 125.04452 - 1934.136261 * T + 0.0020708 * T2 + T3 / 450000;
+  // Nutation (inline to share trig values between nutationInLongitudeDeg/nutationInObliquityDeg and EoT)
+  const meanLunarLongitudeDeg = 218.3165 + 481267.8813 * julianCentury; // skip normalization — only used in sin/cos
+  const lunarAscendingNodeDeg =
+    125.04452 -
+    1934.136261 * julianCentury +
+    0.0020708 * julianCenturySquared +
+    julianCenturyCubed / 450000;
 
-  const OmegaRad = Omega * DEG2RAD;
-  const sinOmega = Math.sin(OmegaRad);
-  const cosOmega = Math.cos(OmegaRad);
-  const sin2Omega = 2 * sinOmega * cosOmega;
-  const cos2Omega = cosOmega * cosOmega - sinOmega * sinOmega;
-  const L0Rad = L0 * DEG2RAD;
-  const sin2L0 = Math.sin(2 * L0Rad);
-  const cos2L0 = Math.cos(2 * L0Rad);
-  const sin2Lp = Math.sin(2 * Lp * DEG2RAD);
-  const cos2Lp = Math.cos(2 * Lp * DEG2RAD);
+  const lunarNodeRad = lunarAscendingNodeDeg * DEG2RAD;
+  const sinLunarNode = Math.sin(lunarNodeRad);
+  const cosLunarNode = Math.cos(lunarNodeRad);
+  const sinTwiceLunarNode = 2 * sinLunarNode * cosLunarNode;
+  const cosTwiceLunarNode =
+    cosLunarNode * cosLunarNode - sinLunarNode * sinLunarNode;
+  const meanLongitudeRad = meanSolarLongitudeDeg * DEG2RAD;
+  const sinTwiceMeanLongitude = Math.sin(2 * meanLongitudeRad);
+  const cosTwiceMeanLongitude = Math.cos(2 * meanLongitudeRad);
+  const sinTwiceLunarLongitude = Math.sin(2 * meanLunarLongitudeDeg * DEG2RAD);
+  const cosTwiceLunarLongitude = Math.cos(2 * meanLunarLongitudeDeg * DEG2RAD);
 
-  const dPsi =
-    (-17.2 / 3600) * sinOmega -
-    (1.32 / 3600) * sin2L0 -
-    (0.23 / 3600) * sin2Lp +
-    (0.21 / 3600) * sin2Omega;
+  // Short-period wobble of Earth's axis in the ecliptic plane direction, caused primarily by the Moon's gravity
+  const nutationInLongitudeDeg =
+    (-17.2 / 3600) * sinLunarNode -
+    (1.32 / 3600) * sinTwiceMeanLongitude -
+    (0.23 / 3600) * sinTwiceLunarLongitude +
+    (0.21 / 3600) * sinTwiceLunarNode;
 
-  const dEpsilon =
-    (9.2 / 3600) * cosOmega +
-    (0.57 / 3600) * cos2L0 +
-    (0.1 / 3600) * cos2Lp -
-    (0.09 / 3600) * cos2Omega;
+  // Short-period wobble perpendicular to nutationInLongitudeDeg; corrects the obliquity
+  const nutationInObliquityDeg =
+    (9.2 / 3600) * cosLunarNode +
+    (0.57 / 3600) * cosTwiceMeanLongitude +
+    (0.1 / 3600) * cosTwiceLunarLongitude -
+    (0.09 / 3600) * cosTwiceLunarNode;
 
-  // Corrected obliquity
-  const eps = eps0 + dEpsilon;
+  // True obliquity = mean obliquity + nutation correction
+  const correctedObliquityDeg = meanObliquityDeg + nutationInObliquityDeg;
 
   // Declination and RA (shared trig)
-  const epsRad = eps * DEG2RAD;
-  const lambdaRad = lambda * DEG2RAD;
-  const sinLambda = Math.sin(lambdaRad);
-  const cosLambda = Math.cos(lambdaRad);
-  const sinEps = Math.sin(epsRad);
-  const cosEps = Math.cos(epsRad);
+  const correctedObliquityRad = correctedObliquityDeg * DEG2RAD;
+  const apparentLongitudeRad = apparentSolarLongitudeDeg * DEG2RAD;
+  const sinApparentLongitude = Math.sin(apparentLongitudeRad);
+  const cosApparentLongitude = Math.cos(apparentLongitudeRad);
+  const sinObliquity = Math.sin(correctedObliquityRad);
+  const cosObliquity = Math.cos(correctedObliquityRad);
 
-  const declination = Math.asin(sinEps * sinLambda) / DEG2RAD;
+  // Declination: angular distance of the sun north/south of the celestial equator
+  const declination = Math.asin(sinObliquity * sinApparentLongitude) / DEG2RAD;
+  // Right ascension: ecliptic longitude projected onto the equatorial plane
   const rightAscension = normalizeDeg(
-    Math.atan2(cosEps * sinLambda, cosLambda) / DEG2RAD,
+    Math.atan2(cosObliquity * sinApparentLongitude, cosApparentLongitude) /
+      DEG2RAD,
   );
 
-  // Apparent sidereal time (Meeus p.88)
-  const JD = T * 36525 + 2451545.0;
-  const Theta0 = normalizeDeg(
+  // Apparent sidereal time: Greenwich hour angle of the vernal equinox, corrected for nutation (Meeus p.88)
+  const julianDateFromCentury = julianCentury * 36525 + 2451545.0;
+  const meanGreenwichSiderealTimeDeg = normalizeDeg(
     280.46061837 +
-      360.98564736629 * (JD - 2451545) +
-      0.000387933 * T2 -
-      T3 / 38710000,
+      360.98564736629 * (julianDateFromCentury - 2451545) +
+      0.000387933 * julianCenturySquared -
+      julianCenturyCubed / 38710000,
   );
-  const apparentSiderealTime = Theta0 + dPsi * Math.cos(eps * DEG2RAD);
+  const apparentSiderealTime =
+    meanGreenwichSiderealTimeDeg +
+    nutationInLongitudeDeg * Math.cos(correctedObliquityDeg * DEG2RAD);
 
-  // Equation of time — reuse sin2L0, cos2L0, sinM from above
-  const halfEpsRad = epsRad / 2;
-  const tanHalf = Math.tan(halfEpsRad);
-  const y = tanHalf * tanHalf;
-  const sin4L0 = 2 * sin2L0 * cos2L0; // sin(4L0) via double-angle of 2L0
-  const eqtRad =
-    y * sin2L0 -
-    2 * eOrb * sinM +
-    4 * eOrb * y * sinM * cos2L0 -
-    0.5 * y * y * sin4L0 -
-    1.25 * eOrb * eOrb * sin2M;
+  // Equation of time: difference between apparent solar time and mean solar time, used to find solar noon
+  // Reuse sinTwiceMeanLongitude, cosTwiceMeanLongitude, sinMeanAnomaly from above
+  const halfObliquityRad = correctedObliquityRad / 2;
+  const tanHalfObliquity = Math.tan(halfObliquityRad);
+  // y = tan²(ε/2): a compact factor encoding the obliquity's effect on the equation of time
+  const eccentricityFactor = tanHalfObliquity * tanHalfObliquity;
+  const sinFourTimesMeanLongitude =
+    2 * sinTwiceMeanLongitude * cosTwiceMeanLongitude; // sin(4L0) via double-angle of 2L0
+  const equationOfTimeRad =
+    eccentricityFactor * sinTwiceMeanLongitude -
+    2 * orbitalEccentricity * sinMeanAnomaly +
+    4 *
+      orbitalEccentricity *
+      eccentricityFactor *
+      sinMeanAnomaly *
+      cosTwiceMeanLongitude -
+    0.5 * eccentricityFactor * eccentricityFactor * sinFourTimesMeanLongitude -
+    1.25 * orbitalEccentricity * orbitalEccentricity * sinTwiceMeanAnomaly;
 
   return {
     declination,
-    eqtMinutes: eqtRad * 229.18,
-    eclipticLong: lambda,
-    obliquity: eps,
+    eqtMinutes: equationOfTimeRad * 229.18,
+    eclipticLong: apparentSolarLongitudeDeg,
+    obliquity: correctedObliquityDeg,
     rightAscension,
     apparentSiderealTime,
   };

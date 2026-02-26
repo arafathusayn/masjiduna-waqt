@@ -18,10 +18,21 @@ const TAN_MAKKAH_LAT = Math.tan(MAKKAH_LAT * DEG2RAD);
  * @returns Bearing in degrees [0, 360)
  */
 export function computeQibla(lat: number, lng: number): number {
-  const dLng = MAKKAH_LNG_RAD - lng * DEG2RAD;
-  const latRad = lat * DEG2RAD;
-  const term1 = Math.sin(dLng);
-  const term2 = Math.cos(latRad) * TAN_MAKKAH_LAT;
-  const term3 = Math.sin(latRad) * Math.cos(dLng);
-  return normalizeDeg(Math.atan2(term1, term2 - term3) * RAD2DEG);
+  // Great-circle bearing formula requires the longitude difference in radians
+  const longitudeDifferenceRad = MAKKAH_LNG_RAD - lng * DEG2RAD;
+  const observerLatitudeRad = lat * DEG2RAD;
+  const sinLongitudeDifference = Math.sin(longitudeDifferenceRad);
+  // cos(φ_obs)·tan(φ_kaaba): the Kaaba's latitude pulls the bearing south in the northern hemisphere
+  const cosObserverLatTimesKaabaLatTan =
+    Math.cos(observerLatitudeRad) * TAN_MAKKAH_LAT;
+  // sin(φ_obs)·cos(ΔL): the observer's latitude adjusts for the curvature of the Earth
+  const sinObserverLatTimesCosLngDiff =
+    Math.sin(observerLatitudeRad) * Math.cos(longitudeDifferenceRad);
+  // atan2 gives the bearing; normalize to [0,360) so north=0, east=90
+  return normalizeDeg(
+    Math.atan2(
+      sinLongitudeDifference,
+      cosObserverLatTimesKaabaLatTan - sinObserverLatTimesCosLngDiff,
+    ) * RAD2DEG,
+  );
 }
