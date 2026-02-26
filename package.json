@@ -1,0 +1,23 @@
+{
+  "name": "masjiduna-waqt",
+  "type": "module",
+  "module": "src/index.ts",
+  "scripts": {
+    "test": "bun test tests/unit/",
+    "test:e2e": "bun test tests/e2e/",
+    "test:all": "bun test",
+    "test:coverage": "bun test --coverage tests/unit/",
+    "typecheck": "bunx tsc --noEmit",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check ."
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "latest",
+    "mitata": "^1.0.34",
+    "oxfmt": "^0.35.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
