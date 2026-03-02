@@ -1,9 +1,9 @@
 <p align="center">
   <h1 align="center">🕌 masjiduna-waqt</h1>
   <p align="center">
-    A well-tested JS/TS Library for prayer times using optimized solar algorithms.
+    A well-tested TS/JS, WASM and Rust library + HTTP API server for prayer times using optimized solar algorithms.
     <br /><br />
-    <small>Zero dependencies</small> · <small>Less than 1 ms for 7K ops 🔥</small>
+    <small>Zero dependencies</small> · <small>7K ops in 96 µs 🔥</small>
     <br /><br />
     <a href="https://github.com/arafathusayn/masjiduna-waqt/actions/workflows/ci.yml">
       <img src="https://github.com/arafathusayn/masjiduna-waqt/actions/workflows/ci.yml/badge.svg" alt="CI" />
@@ -286,41 +286,53 @@ When the sun never reaches the required Fajr/Isha angle (common above ~48° in s
 
 ## ⚡ Benchmarks
 
-7,300 prayer time computations (20 locations x 365 days) on Apple M4 Pro:
+Apple M4 Pro, Bun 1.3.9 — four engines: pure JS, WASM (f32 + SIMD), NAPI (Rust native), and a Rust HTTP server.
 
-```
-❯ bun --bun benchmarks/prayer-times.ts
-clk: ~3.91 GHz
-cpu: Apple M4 Pro
-runtime: bun 1.3.9 (arm64-darwin)
+### Single call — 1 location × 1 date
 
-benchmark                           avg (min … max) p75 / p99    (min … top 1%)
---------------------------------------------------- -------------------------------
-• Prayer Times — 20 locations × 365 days (prebuilt)
---------------------------------------------------- -------------------------------
-masjiduna-waqt (compat-11, prebuilt) 864.07 µs/iter 819.42 µs █
-                              (800.71 µs … 3.01 ms)   2.91 ms █
-                            (  0.00  b …   7.89 mb)  99.32 kb █▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+| Engine                    |    Avg |
+| ------------------------- | -----: |
+| JS `context.compute()`   | 119 ns |
+| JS `computePrayerTimes()` | 178 ns |
+| WASM `batch(1)`           | 246 ns |
+| NAPI `computeBatch(1×1)`  | 542 ns |
+| NAPI `computePrayers`     | 1.40 µs |
 
-masjiduna-waqt (parity-7, prebuilt)  808.36 µs/iter 805.92 µs ▃█
-                              (792.25 µs … 1.11 ms)   1.07 ms ██
-                            (  0.00  b …   2.30 mb)   2.99 kb ██▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+### Mini batch — 10 locations × 365 days (3,650 computations)
 
-masjiduna-waqt (context-11)          844.04 µs/iter 823.96 µs   ▆█
-                              (732.92 µs … 3.57 ms)   1.33 ms   ██
-                            (  0.00  b …  48.00 kb) 138.51  b ▁▃██▅▂▂▁▁▁▁▁▁▁▁▂▂▁▁▁▁
+| Engine                    |    Avg | vs fastest |
+| ------------------------- | -----: | ---------: |
+| NAPI multi-loc batch      |  59 µs |         1x |
+| WASM multi-loc direct     |  93 µs |      1.57x |
+| WASM per-loc batch        | 158 µs |      2.65x |
+| JS `context-11`           | 410 µs |      6.91x |
 
-summary
-  masjiduna-waqt (parity-7, prebuilt)
-   1.04x faster than masjiduna-waqt (context-11)
-   1.07x faster than masjiduna-waqt (compat-11, prebuilt)
-```
+### Full batch — 20 locations × 365 days (7,300 computations)
 
-| Variant      | Description                                        |
-| ------------ | -------------------------------------------------- |
-| `compat-11`  | `computePrayerTimes()` accessing all 11 getters    |
-| `parity-7`   | `computePrayerTimes()` accessing 7 primary prayers |
-| `context-11` | `createPrayerContext().compute()` accessing all 11 |
+| Engine                    |    Avg | vs fastest |
+| ------------------------- | -----: | ---------: |
+| WASM multi-loc direct     |  96 µs |         1x |
+| NAPI multi-loc batch      | 118 µs |      1.23x |
+| WASM per-loc batch        | 316 µs |      3.28x |
+| JS `parity-7`             | 804 µs |      8.35x |
+| JS `context-11`           | 818 µs |      8.49x |
+| JS `compat-11`            | 833 µs |      8.65x |
+
+<details>
+<summary><strong>Engine descriptions</strong></summary>
+<br />
+
+| Engine | Description |
+| --- | --- |
+| JS `computePrayerTimes()` | Pure TypeScript, accessing all 11 getters |
+| JS `context.compute()` | `createPrayerContext()` reusing config across dates |
+| JS `parity-7` / `compat-11` | Prebuilt config, accessing 7 or 11 prayers |
+| WASM `batch` | f32 branchless trig, SIMD auto-vectorization, per-location batch |
+| WASM multi-loc direct | Multi-location EoT-based direct compute in one WASM call |
+| NAPI `computePrayers` | Rust native binding, single call |
+| NAPI multi-loc batch | Rust native binding, batched multi-location compute |
+
+</details>
 
 ```bash
 bun benchmarks/prayer-times.ts
