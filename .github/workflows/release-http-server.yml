@@ -1,0 +1,105 @@
+name: release http-server
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.artifact }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: salah-waqt-http-linux-x64
+            exe: ""
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact: salah-waqt-http-linux-arm64
+            exe: ""
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: salah-waqt-http-darwin-arm64
+            exe: ""
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact: salah-waqt-http-darwin-x64
+            exe: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: salah-waqt-http-windows-x64.exe
+            exe: .exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build release binary
+        env:
+          RUSTFLAGS: ""
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo build --release --target ${{ matrix.target }} --manifest-path http-server/Cargo.toml
+
+      - name: Prepare artifact
+        shell: bash
+        run: cp http-server/target/${{ matrix.target }}/release/salah-waqt-http${{ matrix.exe }} ${{ matrix.artifact }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Extract tag annotation
+        id: tag_body
+        run: |
+          git fetch --tags --force
+          BODY=$(git cat-file -p "refs/tags/${{ github.ref_name }}" | awk '/^$/{found=1; next} found{print}')
+          {
+            echo 'body<<RELEASE_BODY_EOF'
+            echo "$BODY"
+            echo 'RELEASE_BODY_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: waqt ${{ github.ref_name }}
+          body: ${{ steps.tag_body.outputs.body }}
+          generate_release_notes: true
+          files: |
+            artifacts/salah-waqt-http-linux-x64
+            artifacts/salah-waqt-http-linux-arm64
+            artifacts/salah-waqt-http-darwin-arm64
+            artifacts/salah-waqt-http-darwin-x64
+            artifacts/salah-waqt-http-windows-x64.exe
