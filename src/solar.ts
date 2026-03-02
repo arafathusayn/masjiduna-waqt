@@ -180,6 +180,7 @@ export function solarPosition(julianDate: number): SolarPosition {
   // Julian centuries elapsed since J2000.0 epoch; Meeus uses this as the independent variable for all solar series
   const julianCentury = toJulianCentury(julianDate);
   const julianCenturySquared = julianCentury * julianCentury;
+  const julianCenturyCubed = julianCenturySquared * julianCentury;
 
   // Geometric mean longitude of the sun, before nutation and aberration corrections (Meeus p.163)
   const meanSolarLongitudeDeg = normalizeDeg(
@@ -215,15 +216,17 @@ export function solarPosition(julianDate: number): SolarPosition {
   const trueSolarLongitudeDeg = normalizeDeg(
     meanSolarLongitudeDeg + equationOfCenterDeg,
   );
-  // Apparent longitude accounts for nutation (ΔΨ) and aberration (the −0.00569 − 0.00478·sin(Ω) correction)
+  
+  // Shared Ascending Lunar Node for aberration and nutation
   const moonAscendingNodeLongitudeDeg = 125.04 - 1934.136 * julianCentury;
+
+  // Apparent longitude accounts for nutation (ΔΨ) and aberration (the −0.00569 − 0.00478·sin(Ω) correction)
   const apparentSolarLongitudeDeg =
     trueSolarLongitudeDeg -
     0.00569 -
     0.00478 * Math.sin(moonAscendingNodeLongitudeDeg * DEG2RAD);
 
   // Tilt of Earth's rotational axis relative to the ecliptic plane; slowly decreasing over centuries
-  const julianCenturyCubed = julianCenturySquared * julianCentury;
   const meanObliquityDeg =
     23.439291 -
     0.013004167 * julianCentury -
@@ -247,8 +250,10 @@ export function solarPosition(julianDate: number): SolarPosition {
   const meanLongitudeRad = meanSolarLongitudeDeg * DEG2RAD;
   const sinTwiceMeanLongitude = Math.sin(2 * meanLongitudeRad);
   const cosTwiceMeanLongitude = Math.cos(2 * meanLongitudeRad);
-  const sinTwiceLunarLongitude = Math.sin(2 * meanLunarLongitudeDeg * DEG2RAD);
-  const cosTwiceLunarLongitude = Math.cos(2 * meanLunarLongitudeDeg * DEG2RAD);
+  
+  const twiceLunarLongitudeRad = 2 * meanLunarLongitudeDeg * DEG2RAD;
+  const sinTwiceLunarLongitude = Math.sin(twiceLunarLongitudeRad);
+  const cosTwiceLunarLongitude = Math.cos(twiceLunarLongitudeRad);
 
   // Short-period wobble of Earth's axis in the ecliptic plane direction, caused primarily by the Moon's gravity
   const nutationInLongitudeDeg =

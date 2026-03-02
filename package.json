@@ -29,6 +29,12 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./wasm": {
+      "import": {
+        "types": "./dist/wasm/index.d.ts",
+        "default": "./dist/wasm/index.js"
+      }
     }
   },
   "scripts": {
@@ -38,6 +44,10 @@
     "prepublishOnly": "bun run build",
     "test": "bun test tests/unit/",
     "test:e2e": "bun test tests/e2e/",
+    "test:wasm": "bun test tests/wasm/prayers.test.ts tests/wasm/prayers-context.test.ts",
+    "test:wasm:e2e": "bun test tests/wasm/aladhan.test.ts",
+    "test:napi": "bun test tests/napi/prayers.test.ts tests/napi/prayers-context.test.ts",
+    "test:napi:e2e": "bun test tests/napi/aladhan.test.ts",
     "test:all": "bun test tests/unit/ tests/e2e/ tests/dist-sanity/",
     "test:coverage": "bun test --coverage",
     "test:dist": "bun test tests/dist-sanity/",

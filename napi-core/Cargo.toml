@@ -1,0 +1,26 @@
+[package]
+name = "napi-core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+napi = { version = "3.8.3", default-features = false, features = ["napi4"] }
+napi-derive = "3.5.2"
+
+[build-dependencies]
+napi-build = "2.3.1"
+
+[profile.release]
+lto = "fat"
+opt-level = 3
+panic = "abort"
+codegen-units = 1
+
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = false
+lto = "thin"

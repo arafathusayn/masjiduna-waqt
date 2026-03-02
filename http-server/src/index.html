@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Salah Time</title>
+<script>
+// Blocking fetch: returning users get data before first paint — zero layout shift
+try {
+  const loc = JSON.parse(localStorage.getItem('loc'));
+  if (loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lon)
+      && Math.abs(loc.lat) <= 90 && Math.abs(loc.lon) <= 180) {
+    document.documentElement.classList.add('has-loc');
+    const d = new Date();
+    const p = n => n < 10 ? '0' + n : '' + n;
+    const date = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    const tz = loc.tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', `/api/bd/?lat=${loc.lat}&lon=${loc.lon}&tzname=${encodeURIComponent(tz)}&date=${date}`, false);
+    xhr.send();
+    if (xhr.status === 200) {
+      const json = JSON.parse(xhr.responseText);
+      if (!json?.code || json.code < 400) window.__data = json;
+    }
+  }
+} catch {}
+</script>
+<style>
+.has-loc #onboard { display: none !important; }
+:root {
+  --bg: #d5d8d7;
+  --bg-mesh: radial-gradient(ellipse 60% 50% at 15% 5%, rgba(15,118,110,0.14) 0%, transparent 70%),
+             radial-gradient(ellipse 50% 60% at 85% 90%, rgba(20,184,166,0.10) 0%, transparent 70%),
+             radial-gradient(ellipse 80% 80% at 50% 50%, rgba(120,140,135,0.06) 0%, transparent 80%);
+  --surface: rgba(255,255,255,0.40);
+  --surface2: rgba(255,255,255,0.22);
+  --glass-blur: blur(24px) saturate(1.2);
+  --glass-border: 1px solid rgba(255,255,255,0.50);
+  --glass-border-subtle: 1px solid rgba(255,255,255,0.28);
+  --glass-highlight: inset 0 1px 0 rgba(255,255,255,0.45);
+  --fg: #1a1a1a;
+  --fg2: #4a4a4a;
+  --fg3: #787878;
+  --accent: #0e6b64;
+  --accent-soft: rgba(15,118,110,0.10);
+  --accent-glow: rgba(15,118,110,0.18);
+  --accent-glow2: rgba(15,118,110,0.07);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.03);
+  --shadow: 0 4px 12px rgba(0,0,0,0.07), 0 12px 32px rgba(0,0,0,0.04);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.10), 0 2px 10px rgba(0,0,0,0.05);
+  --shadow-accent: 0 4px 24px rgba(15,118,110,0.20), 0 0 0 1px rgba(15,118,110,0.10);
+  --border: rgba(0,0,0,0.05);
+  --radius: 22px;
+  --radius-sm: 16px;
+  --countdown-bg: linear-gradient(135deg, rgba(15,118,110,0.78) 0%, rgba(13,148,136,0.82) 50%, rgba(20,184,166,0.75) 100%);
+  --countdown-fg: #fff;
+  --nav-bg: rgba(213,216,215,0.50);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: var(--bg-mesh), var(--bg);
+  background-attachment: fixed;
+  color: var(--fg);
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Nav ── */
+.nav {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--nav-bg);
+  backdrop-filter: blur(32px) saturate(1.5); -webkit-backdrop-filter: blur(32px) saturate(1.5);
+  border-bottom: var(--glass-border-subtle);
+  box-shadow: var(--glass-highlight), 0 1px 8px rgba(0,0,0,0.04);
+  padding: 0 1.5rem;
+  height: 56px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-brand { font-size: 1.05rem; font-weight: 700; color: var(--accent); text-decoration: none; letter-spacing: -0.02em; }
+.nav-right { display: flex; align-items: center; gap: 0.25rem; }
+.nav-link {
+  color: var(--fg2); text-decoration: none; font-size: 0.82rem; font-weight: 500;
+  padding: 0.4rem 0.7rem; border-radius: 8px; transition: all 0.2s;
+}
+.nav-link:hover { background: var(--accent-glow); color: var(--accent); }
+
+
+/* ── Container ── */
+.wrap { max-width: 520px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+
+/* ── Location ── */
+.loc { text-align: center; margin-bottom: 1.5rem; }
+.loc-city { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.03em; color: var(--fg); }
+.loc-sub { font-size: 0.82rem; color: var(--fg3); margin-top: 0.15rem; font-weight: 500; }
+.loc-badge {
+  display: inline-block; background: var(--accent-soft); color: var(--accent);
+  padding: 0.15em 0.65em; border-radius: 999px; font-size: 0.72rem; font-weight: 600;
+  margin-left: 0.35rem; letter-spacing: 0.01em;
+  border: 1px solid rgba(15,118,110,0.12);
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.loc-coords { font-size: 0.75rem; color: var(--fg3); margin-top: 0.25rem; font-variant-numeric: tabular-nums; }
+
+/* ── Countdown hero ── */
+.countdown {
+  background: var(--countdown-bg);
+  border-radius: var(--radius);
+  padding: 1.6rem;
+  text-align: center;
+  color: var(--countdown-fg);
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow-accent), inset 0 1px 0 rgba(255,255,255,0.18);
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(32px) saturate(1.4); -webkit-backdrop-filter: blur(32px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.20);
+}
+.countdown::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at 25% 15%, rgba(255,255,255,0.20) 0%, transparent 45%),
+              radial-gradient(circle at 75% 85%, rgba(255,255,255,0.08) 0%, transparent 45%);
+  pointer-events: none;
+}
+.countdown-label { font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.8; }
+.countdown-prayer { font-size: 1.15rem; font-weight: 700; margin-top: 0.2rem; }
+.countdown-time { font-size: 2.8rem; font-weight: 800; letter-spacing: -0.03em; margin-top: 0.25rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.countdown-at { font-size: 0.85rem; margin-top: 0.35rem; opacity: 0.75; font-weight: 500; }
+
+/* ── Date nav ── */
+.date-bar {
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+.date-btn {
+  width: 36px; height: 36px; border-radius: 12px; border: var(--glass-border);
+  background: var(--surface); cursor: pointer; font-size: 0.85rem;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; color: var(--fg2);
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-sm), var(--glass-highlight);
+}
+.date-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); box-shadow: var(--shadow), var(--glass-highlight); }
+.date-text { font-size: 0.88rem; font-weight: 600; min-width: 180px; text-align: center; }
+.date-today { font-size: 0.72rem; color: var(--fg3); font-weight: 500; }
+.today-pill {
+  font-size: 0.72rem; font-weight: 600; background: var(--accent-soft); color: var(--accent);
+  border: 1px solid rgba(15,118,110,0.15); border-radius: 999px; padding: 0.25em 0.75em; cursor: pointer; transition: all 0.2s;
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.today-pill:hover { opacity: 0.8; }
+.today-pill.hidden { display: none; }
+
+/* ── Section ── */
+.section { margin-bottom: 1rem; }
+.section-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 1rem; margin-bottom: 0.5rem;
+}
+.section-pill {
+  display: inline-flex; align-items: center;
+  background: var(--accent-soft); color: var(--accent);
+  padding: 0.2em 0.75em; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  border: 1px solid rgba(15,118,110,0.1);
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.section-cols {
+  display: flex; gap: 0.5rem;
+  font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--fg3);
+}
+.section-cols span { min-width: 5rem; text-align: right; }
+
+/* ── Prayer row ── */
+.prayer-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface); border-radius: var(--radius-sm);
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.45rem;
+  box-shadow: var(--shadow-sm), var(--glass-highlight);
+  border: var(--glass-border);
+  transition: all 0.25s ease;
+  cursor: default;
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+}
+.prayer-row:hover { box-shadow: var(--shadow), var(--glass-highlight); transform: translateY(-1px); border-color: rgba(255,255,255,0.65); }
+
+.prayer-row.active {
+  border-color: rgba(15,118,110,0.35);
+  background: rgba(15,118,110,0.10);
+  box-shadow: var(--shadow-accent), inset 0 1px 0 rgba(15,118,110,0.12);
+  backdrop-filter: blur(28px) saturate(1.3); -webkit-backdrop-filter: blur(28px) saturate(1.3);
+}
+
+.prayer-row.active .pr-name { color: var(--accent); font-weight: 700; }
+.prayer-row.active .pr-time { color: var(--accent); }
+.pr-left { display: flex; align-items: center; gap: 0.65rem; min-width: 0; }
+.pr-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0;
+  transition: all 0.3s;
+}
+.prayer-row.active .pr-dot { background: var(--accent); box-shadow: 0 0 10px var(--accent-glow), 0 0 20px var(--accent-glow2); }
+.prayer-row.passed .pr-dot { background: var(--fg3); opacity: 0.4; }
+.pr-name { font-size: 0.88rem; font-weight: 500; color: var(--fg); }
+.prayer-row.passed .pr-name { color: var(--fg3); }
+.pr-times { display: flex; align-items: baseline; gap: 0.5rem; flex-shrink: 0; }
+.pr-time { font-size: 0.92rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--fg); letter-spacing: 0.01em; min-width: 5rem; text-align: right; }
+.pr-end { font-size: 0.82rem; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--fg3); min-width: 5rem; text-align: right; }
+.prayer-row.passed .pr-time { color: var(--fg3); }
+.prayer-row.passed .pr-end { color: var(--fg3); opacity: 0.6; }
+.prayer-row.active .pr-end { color: var(--accent); opacity: 0.75; }
+
+/* ── Loading / Error ── */
+.loading { text-align: center; padding: 6rem 1rem; }
+.spinner {
+  width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.65s linear infinite; margin: 0 auto 1rem;
+  box-shadow: 0 0 12px var(--accent-glow2);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { color: var(--fg3); font-size: 0.88rem; font-weight: 500; }
+
+/* Error card with icon + retry */
+.err-card {
+  background: var(--surface); border: 1px solid rgba(252,165,165,0.35); border-radius: var(--radius);
+  padding: 1.75rem 1.25rem; text-align: center; animation: fadeUp 0.3s ease-out both;
+  backdrop-filter: blur(28px) saturate(1.3); -webkit-backdrop-filter: blur(28px) saturate(1.3);
+  box-shadow: var(--shadow), var(--glass-highlight);
+}
+
+.err-icon { font-size: 2rem; margin-bottom: 0.6rem; line-height: 1; }
+.err-title { font-size: 0.95rem; font-weight: 700; color: var(--fg); margin-bottom: 0.25rem; }
+.err-msg { font-size: 0.82rem; color: var(--fg2); line-height: 1.5; margin-bottom: 1rem; }
+.err-retry {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  background: var(--countdown-bg); color: #fff; border: 1px solid rgba(255,255,255,0.22); border-radius: 14px;
+  padding: 0.55rem 1.25rem; font-family: inherit; font-size: 0.82rem; font-weight: 600;
+  cursor: pointer; transition: all 0.25s; box-shadow: var(--shadow-accent), inset 0 1px 0 rgba(255,255,255,0.15);
+  backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2);
+}
+.err-retry:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(15,118,110,0.35), inset 0 1px 0 rgba(255,255,255,0.18); }
+.err-retry:active { transform: translateY(0); }
+.err-secondary {
+  display: inline-block; margin-top: 0.5rem; background: none; border: none;
+  color: var(--fg3); font-family: inherit; font-size: 0.78rem; font-weight: 500;
+  cursor: pointer; padding: 0.35rem 0.75rem; border-radius: 6px; transition: all 0.2s;
+}
+.err-secondary:hover { color: var(--fg2); background: var(--accent-glow); }
+
+/* Offline banner */
+.offline-banner {
+  display: none;
+  position: fixed; top: 56px; left: 0; right: 0; z-index: 150;
+  background: rgba(245,158,11,0.85); color: #000; text-align: center;
+  font-size: 0.78rem; font-weight: 600; padding: 0.4rem 1rem;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(245,158,11,0.3);
+}
+.offline-banner.visible { display: block; }
+
+
+/* ── Onboarding overlay ── */
+.onboard {
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--bg-mesh), var(--bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 2rem;
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+.onboard.leaving { opacity: 0; transform: scale(1.04); pointer-events: none; }
+.onboard-inner {
+  max-width: 380px; text-align: center;
+  background: var(--surface);
+  backdrop-filter: blur(32px) saturate(1.4); -webkit-backdrop-filter: blur(32px) saturate(1.4);
+  border: var(--glass-border);
+  border-radius: 28px;
+  padding: 2.5rem 2rem 2rem;
+  box-shadow: var(--shadow-lg), var(--glass-highlight);
+}
+
+/* Geometric mosque silhouette */
+.onboard-icon {
+  width: 88px; height: 88px; margin: 0 auto 1.75rem;
+  border-radius: 50%; background: var(--countdown-bg);
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,255,255,0.25);
+  box-shadow: var(--shadow-accent), 0 0 0 8px var(--accent-glow2), 0 0 0 16px var(--accent-glow2), inset 0 1px 0 rgba(255,255,255,0.20);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  animation: iconPulse 2.5s ease-in-out infinite;
+}
+@keyframes iconPulse {
+  0%, 100% { box-shadow: var(--shadow-accent), 0 0 0 8px var(--accent-glow2), 0 0 0 16px var(--accent-glow2); }
+  50% { box-shadow: var(--shadow-accent), 0 0 0 12px var(--accent-glow), 0 0 0 24px var(--accent-glow2); }
+}
+.onboard-icon svg { width: 40px; height: 40px; fill: #fff; opacity: 0.95; }
+
+.onboard-title {
+  font-size: 1.65rem; font-weight: 800; letter-spacing: -0.03em;
+  color: var(--fg); margin-bottom: 0.4rem;
+}
+.onboard-sub {
+  font-size: 0.92rem; color: var(--fg2); font-weight: 500; line-height: 1.55;
+  margin-bottom: 2rem;
+}
+
+.onboard-btn {
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  width: 100%; padding: 0.9rem 1.5rem;
+  background: var(--countdown-bg); color: #fff;
+  border: 1px solid rgba(255,255,255,0.25); border-radius: 16px;
+  font-family: inherit; font-size: 0.95rem; font-weight: 700;
+  cursor: pointer; transition: all 0.25s;
+  box-shadow: var(--shadow-accent), inset 0 1px 0 rgba(255,255,255,0.18);
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2);
+}
+.onboard-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 36px rgba(15,118,110,0.38), inset 0 1px 0 rgba(255,255,255,0.22); }
+.onboard-btn:active { transform: translateY(0); }
+.onboard-btn svg { width: 20px; height: 20px; fill: currentColor; flex-shrink: 0; }
+
+.onboard-skip {
+  margin-top: 0.85rem;
+  background: var(--surface2); border: var(--glass-border-subtle);
+  color: var(--fg3); font-family: inherit; font-size: 0.82rem; font-weight: 500;
+  cursor: pointer; padding: 0.5rem 1rem; border-radius: 10px;
+  transition: all 0.2s;
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+}
+.onboard-skip:hover { color: var(--fg2); background: var(--accent-glow); border-color: rgba(15,118,110,0.15); }
+
+
+.onboard-footer {
+  margin-top: 2.5rem;
+  font-size: 0.72rem; color: var(--fg3); font-weight: 500; opacity: 0.6;
+}
+
+/* Spinner variant inside onboard btn */
+.onboard-btn .btn-spinner {
+  width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,0.3);
+  border-top-color: #fff; border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+.onboard-btn.loading-state { opacity: 0.85; pointer-events: none; }
+
+/* ── Footer ── */
+.footer {
+  text-align: center; padding: 2rem 1rem; font-size: 0.75rem; color: var(--fg3); font-weight: 500;
+  opacity: 0; visibility: hidden;
+}
+.footer.visible { opacity: 0.8; visibility: visible; }
+.footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.footer a:hover { text-decoration: underline; }
+
+/* ── Animations ── */
+
+/* Container fade transition */
+.wrap { transition: opacity 2s ease; }
+.wrap.fading { opacity: 0; transition: none; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-in { animation: fadeUp 0.6s ease-out both; }
+.delay-1 { animation-delay: 0.08s; }
+.delay-2 { animation-delay: 0.16s; }
+.delay-3 { animation-delay: 0.24s; }
+.delay-4 { animation-delay: 0.32s; }
+.delay-5 { animation-delay: 0.40s; }
+.delay-6 { animation-delay: 0.48s; }
+
+/* Skip entrance animations for instant renders (returning users) */
+.has-loc .animate-in { animation: none; }
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  .wrap { padding: 1rem 0.75rem 3rem; }
+  .loc-city { font-size: 1.45rem; }
+  .countdown-time { font-size: 2.3rem; }
+  .prayer-row { padding: 0.75rem 0.85rem; }
+  .pr-time, .pr-end, .section-cols span { min-width: 4.2rem; }
+  .pr-end { font-size: 0.75rem; }
+  .section-hd { padding: 0 0.85rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="onboard" id="onboard">
+  <div class="onboard-inner">
+    <div class="onboard-icon">
+      <svg viewBox="0 0 24 24"><path d="M12 2C12 2 7.5 6 7.5 9.5C7.5 10.38 7.71 11.21 8.07 11.95L2 20H4.5L6 17.74L7.04 20H9.54L8.41 16.49C9.4 17.42 10.64 18 12 18C13.36 18 14.6 17.42 15.59 16.49L14.46 20H16.96L17.99 17.74L19.5 20H22L15.93 11.95C16.29 11.21 16.5 10.38 16.5 9.5C16.5 6 12 2 12 2ZM12 16C10.07 16 8.5 13.31 8.5 10.5C8.5 8.12 10.41 5.35 12 3.66C13.59 5.35 15.5 8.12 15.5 10.5C15.5 13.31 13.93 16 12 16Z"/></svg>
+    </div>
+    <div class="onboard-title">Salah Time</div>
+    <div class="onboard-sub">Accurate prayer times based on your location. Allow access to find times for your city.</div>
+    <button class="onboard-btn" id="obAllow">
+      <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>
+      <span id="obBtnText">Enable Location</span>
+    </button>
+    <button class="onboard-skip" id="obSkip">Continue without GPS</button>
+    <div class="onboard-footer">Your location is never stored on our servers</div>
+  </div>
+</div>
+
+<nav class="nav">
+  <a href="/" class="nav-brand">Waqt</a>
+  <div class="nav-right">
+    <a href="/api/docs" class="nav-link">API</a>
+  </div>
+</nav>
+
+<div class="offline-banner" id="offlineBanner">You are offline</div>
+
+<div class="wrap" id="app"></div>
+
+<div class="footer" id="footer">
+  Waqt website was built by <a href="https://arafat.dev">Arafat Husayn</a>
+</div>
+
+<script type="module">
+// ── Offline detection (event-driven only; navigator.onLine is unreliable) ──
+const OFL = document.getElementById('offlineBanner');
+addEventListener('online', () => { OFL.classList.remove('visible'); if (S.lat !== 0) load(); });
+addEventListener('offline', () => OFL.classList.add('visible'));
+
+// ── State ──
+const APP = document.getElementById('app');
+const TODAY = new Date();
+const S = { lat: 0, lon: 0, tz: 'UTC', city: '', region: '', country: '', date: new Date() };
+let lastData = null;
+let cdTimer = 0;
+let abortCtrl = null; // cancel in-flight fetches on rapid date nav
+
+// Date range limits: ±3 years from today
+const MIN_DATE = new Date(TODAY.getFullYear() - 3, TODAY.getMonth(), TODAY.getDate());
+const MAX_DATE = new Date(TODAY.getFullYear() + 3, TODAY.getMonth(), TODAY.getDate());
+
+// ── Prayer lookup maps (O(1) vs O(n) scan) ──
+const PRAYERS = [
+  ['fajar18','Fajr'],['rise','Sunrise'],['ishraq','Ishraq'],
+  ['noon','Dhuhr'],['asar1','Asr (Shafi)'],['asar2','Asr (Hanafi)'],
+  ['setstart','Sunset Start'],['set','Maghrib'],['esha','Isha'],
+  ['night1','1st Third'],['midnight','Midnight'],['night2','2nd Third'],['night6','Last Sixth'],
+];
+const PRAYER_MAP = new Map(PRAYERS);
+
+// End-time mapping based on Sunni fiqh:
+// - Fajr ends at sunrise (all madhabs)
+// - Dhuhr ends when Asr begins
+// - Asr ends at sunset (all madhabs; makruh after sun yellows ~30min before)
+// - Maghrib ends when Isha begins (red twilight disappears)
+// - Isha ends at midnight — "The time for Isha is until half the night" (Sahih Muslim 612)
+// - Night divisions are sequential markers for tahajjud/qiyam
+const END_KEY = new Map([
+  ['fajar18','rise'],       // Fajr ends at Sunrise
+  ['rise','ishraq'],        // Forbidden time ends ~15min after sunrise
+  ['ishraq','noon'],        // Duha/Ishraq window ends at Dhuhr
+  ['noon','asar1'],         // Dhuhr ends when Asr (Shafi) begins
+  ['asar1','set'],          // Asr (Shafi) ends at Sunset
+  ['asar2','set'],          // Asr (Hanafi) ends at Sunset
+  ['setstart','set'],       // Sunset start → Sunset
+  ['set','esha'],           // Maghrib ends when Isha begins
+  ['esha','midnight'],      // Isha ends at midnight (Sahih Muslim)
+  ['night1','midnight'],    // First third → midnight
+  ['midnight','night2'],    // Midnight → last third begins
+  ['night2','night6'],      // Last third → last sixth
+  ['night6','fajar18'],     // Last sixth → Fajr
+]);
+
+const MAJOR = [
+  ['fajar18','Fajr'],['rise','Sunrise'],['noon','Dhuhr'],
+  ['asar1','Asr'],['set','Maghrib'],['esha','Isha'],
+];
+
+const SECTIONS = [
+  { title: 'Fajr & Sunrise', keys: ['fajar18','rise','ishraq'] },
+  { title: 'Dhuhr & Asr', keys: ['noon','asar1','asar2'] },
+  { title: 'Maghrib & Isha', keys: ['setstart','set','esha'] },
+  { title: 'Night', keys: ['night1','midnight','night2','night6'] },
+];
+
+// ── Helpers ──
+const pad2 = n => n < 10 ? '0' + n : '' + n;
+const iso = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const readable = d => `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+const _escEl = document.createElement('span');
+const esc = s => { _escEl.textContent = s; return _escEl.innerHTML; };
+const nowSecs = () => (Date.now() / 1000) | 0;
+const isFiniteNum = v => typeof v === 'number' && Number.isFinite(v);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+const findNext = data => {
+  const now = nowSecs();
+  for (const [k, n] of MAJOR) {
+    const e = data[k];
+    if (e?.secs > now) return { name: n, secs: e.secs, short: e.short };
+  }
+  return null;
+};
+
+const findCurrent = data => {
+  const now = nowSecs();
+  let cur = null;
+  for (const [k] of MAJOR) {
+    if (data[k]?.secs <= now) cur = k;
+  }
+  return cur;
+};
+
+// Find the end time for the currently active prayer using END_KEY + MAJOR
+const findCurrentEnd = data => {
+  const now = nowSecs();
+  let curName = null, endSecs = null, endShort = null;
+  for (const [k, n] of MAJOR) {
+    if (data[k]?.secs <= now) {
+      curName = n;
+      const ek = END_KEY.get(k);
+      const ee = ek ? data[ek] : null;
+      if (ee && typeof ee === 'object' && isFiniteNum(ee.secs) && ee.secs > now) {
+        endSecs = ee.secs;
+        endShort = ee.short;
+      }
+    }
+  }
+  if (curName && endSecs) return { name: curName, secs: endSecs, short: endShort };
+  return null;
+};
+
+const fmtCountdown = secs => {
+  const h = (secs / 3600) | 0;
+  const m = ((secs % 3600) / 60) | 0;
+  const s = secs % 60;
+  return (h > 0 ? h + 'h ' : '') + pad2(m) + 'm ' + pad2(s) + 's';
+};
+
+// ── Error UI ──
+const fadeIn = () => { APP.classList.add('fading'); APP.offsetHeight; APP.classList.remove('fading'); };
+
+const showErr = (title, msg, retryFn, secondaryLabel, secondaryFn) => {
+  const p = [`<div class="err-card"><div class="err-icon">\u26A0\uFE0F</div><div class="err-title">${esc(title)}</div><div class="err-msg">${esc(msg)}</div>`];
+  if (retryFn) p.push(`<button class="err-retry" id="errRetry">\u21BB Retry</button>`);
+  if (secondaryLabel) p.push(`<br><button class="err-secondary" id="errSec">${esc(secondaryLabel)}</button>`);
+  p.push('</div>');
+  APP.classList.add('fading');
+  APP.innerHTML = p.join('');
+  APP.offsetHeight;
+  APP.classList.remove('fading');
+  if (retryFn) document.getElementById('errRetry').onclick = retryFn;
+  if (secondaryFn) document.getElementById('errSec')?.addEventListener('click', secondaryFn);
+};
+
+const showNetErr = () => showErr(
+  'Connection Error',
+  navigator.onLine ? 'Could not reach the server. It may be temporarily unavailable.' : 'You appear to be offline. Check your internet connection.',
+  () => load(),
+);
+
+const showApiErr = msg => showErr('Invalid Request', msg, () => load());
+
+// ── Render ──
+const render = api => {
+  // Validate API response structure
+  if (!api?.data || typeof api.data !== 'object') {
+    showErr('Unexpected Response', 'The server returned an invalid response. Please try again.', () => load());
+    return;
+  }
+
+  lastData = api.data;
+  const { data } = api;
+  const isToday = sameDay(S.date, TODAY);
+  const curKey = isToday ? findCurrent(data) : null;
+  const now = nowSecs();
+  let ani = 0;
+
+  const p = [];
+
+  // Location header: row 1 = City, Country; row 2 = Timezone pill
+  const heading = [S.city, S.country].filter(Boolean).join(', ') || 'Prayer Times';
+  p.push(`<div class="loc animate-in"><div class="loc-city">${esc(heading)}</div><div class="loc-sub"><span class="loc-badge">${esc(S.tz)}</span></div></div>`);
+
+  // Countdown hero — always show on today
+  if (isToday) {
+    const next = findNext(data);
+    const curEnd = findCurrentEnd(data);
+    // Prefer showing current prayer remaining; fall back to next prayer countdown
+    const cd = curEnd ?? next;
+    const cdLabel = curEnd ? 'Time Remaining' : 'Next Prayer';
+    if (cd && cd.secs > now) {
+      p.push(
+        `<div class="countdown animate-in delay-1" id="cd">`,
+        `<div class="countdown-label">${cdLabel}</div>`,
+        `<div class="countdown-prayer">${esc(cd.name)}</div>`,
+        `<div class="countdown-time" id="cdTime">${fmtCountdown(cd.secs - now)}</div>`,
+        `<div class="countdown-at">${curEnd ? 'ends' : 'at'} ${esc(cd.short)}</div></div>`
+      );
+    }
+  }
+
+  // Date bar with range-aware buttons
+  const atMin = S.date <= MIN_DATE;
+  const atMax = S.date >= MAX_DATE;
+  p.push(`<div class="date-bar animate-in delay-2"><button class="date-btn" id="prev"${atMin ? ' disabled style="opacity:0.3;pointer-events:none"' : ''}>\u2039</button><div class="date-text">${readable(S.date)}`);
+  if (isToday) p.push('<div class="date-today">Today</div>');
+  p.push(`</div><button class="date-btn" id="next"${atMax ? ' disabled style="opacity:0.3;pointer-events:none"' : ''}>\u203A</button> <button class="today-pill${isToday ? ' hidden' : ''}" id="goToday">Today</button></div>`);
+
+  // Reorder sections: rotate from active section clockwise through next day
+  let ordered = SECTIONS;
+  if (isToday && curKey) {
+    const idx = SECTIONS.findIndex(s => s.keys.includes(curKey));
+    if (idx > 0) ordered = [...SECTIONS.slice(idx), ...SECTIONS.slice(0, idx)];
+  }
+
+  // Prayer sections (safe access on every field)
+  for (const sec of ordered) {
+    const dc = ++ani < 6 ? ` delay-${ani}` : '';
+    p.push(`<div class="section animate-in${dc}"><div class="section-hd"><span class="section-pill">${sec.title}</span><div class="section-cols"><span>Starts</span><span>Ends</span></div></div>`);
+    for (const key of sec.keys) {
+      const name = PRAYER_MAP.get(key);
+      if (!name) continue;
+      const e = data[key];
+      const hasTime = e && typeof e === 'object' && typeof e.short === 'string';
+      const t = hasTime ? e.short : '--:--';
+      let cls = 'prayer-row';
+      if (isToday && hasTime && isFiniteNum(e.secs)) {
+        cls += key === curKey ? ' active' : e.secs <= now ? ' passed' : '';
+      }
+      const endKey = END_KEY.get(key);
+      const endE = endKey ? data[endKey] : null;
+      const endT = endE && typeof endE === 'object' && typeof endE.short === 'string' ? endE.short : '\u2014';
+      p.push(
+        `<div class="${cls}"><div class="pr-left"><div class="pr-dot"></div>`,
+        `<span class="pr-name">${esc(name)}</span></div>`,
+        `<div class="pr-times"><span class="pr-time">${esc(t)}</span>`,
+        `<span class="pr-end">${esc(endT)}</span></div></div>`
+      );
+    }
+    p.push('</div>');
+  }
+
+  // Fade transition: set opacity 0 instantly, swap content, fade in over 1s
+  APP.classList.add('fading');
+  APP.innerHTML = p.join('');
+
+  // Force a layout read so the browser registers opacity:0 before transitioning
+  APP.offsetHeight;
+  APP.classList.remove('fading');
+
+  // Bind date navigation
+  document.getElementById('prev')?.addEventListener('click', () => chg(-1));
+  document.getElementById('next')?.addEventListener('click', () => chg(1));
+  document.getElementById('goToday')?.addEventListener('click', () => { S.date = new Date(TODAY); load(); });
+
+  // Countdown tick
+  if (cdTimer) clearInterval(cdTimer);
+  if (isToday) cdTimer = setInterval(tickCountdown, 1000);
+
+  document.getElementById('footer')?.classList.add('visible');
+};
+
+const tickCountdown = () => {
+  if (!lastData) return;
+  const curEnd = findCurrentEnd(lastData);
+  const next = findNext(lastData);
+  const cd = curEnd ?? next;
+  const el = document.getElementById('cdTime');
+  if (!cd || !el) { clearInterval(cdTimer); cdTimer = 0; return; }
+  const diff = cd.secs - nowSecs();
+  if (diff <= 0) { load(); return; } // prayer changed — re-render
+  el.textContent = fmtCountdown(diff);
+};
+
+// ── Date navigation with bounds ──
+const chg = d => {
+  const next = new Date(S.date);
+  next.setDate(next.getDate() + d);
+  if (next < MIN_DATE || next > MAX_DATE) return; // silently clamp
+  S.date = next;
+  load();
+};
+
+// ── Load with abort, retry, validation ──
+const load = async () => {
+  // Validate state before fetch
+  if (!isFiniteNum(S.lat) || !isFiniteNum(S.lon)) {
+    showErr('Location Error', 'Invalid coordinates detected. Please reload the page.', () => location.reload());
+    return;
+  }
+  if (!(S.date instanceof Date) || isNaN(S.date.getTime())) {
+    S.date = new Date(TODAY);
+  }
+
+  // Abort previous in-flight request
+  abortCtrl?.abort();
+  abortCtrl = new AbortController();
+
+  const u = `/api/bd/?lat=${S.lat}&lon=${S.lon}&tzname=${encodeURIComponent(S.tz)}&date=${iso(S.date)}`;
+  try {
+    const res = await fetch(u, { signal: abortCtrl.signal });
+
+    if (!res.ok) {
+      // Try to parse error body
+      try {
+        const err = await res.json();
+        showApiErr(err.data ?? `Server error (${res.status})`);
+      } catch {
+        showErr('Server Error', `Unexpected response (HTTP ${res.status})`, () => load());
+      }
+      return;
+    }
+
+    let d;
+    try {
+      d = await res.json();
+    } catch {
+      showErr('Parse Error', 'The server returned invalid JSON.', () => load());
+      return;
+    }
+
+    if (d?.code >= 400) {
+      showApiErr(typeof d.data === 'string' ? d.data : 'Unknown error');
+      return;
+    }
+
+    render(d);
+  } catch (e) {
+    if (e.name === 'AbortError') return; // superseded by newer request
+    showNetErr();
+  }
+};
+
+// ── Onboarding + Location ──
+const OB = document.getElementById('onboard');
+const OB_BTN = document.getElementById('obAllow');
+const OB_SKIP = document.getElementById('obSkip');
+
+const dismissOnboard = () => {
+  OB.classList.add('leaving');
+  setTimeout(() => { OB.style.display = 'none'; }, 500);
+};
+
+const setBtnLoading = text => {
+  OB_BTN.className = 'onboard-btn loading-state';
+  OB_BTN.innerHTML = `<div class="btn-spinner"></div><span>${text}</span>`;
+  OB_SKIP.style.display = 'none';
+};
+
+const resetOnboard = () => {
+  OB_BTN.className = 'onboard-btn';
+  OB_BTN.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg><span>Enable Location</span>`;
+  OB_SKIP.style.display = '';
+};
+
+// Validate and sanitize coordinates
+const validateCoords = (lat, lon) =>
+  isFiniteNum(lat) && isFiniteNum(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+
+const go = (lat, lon, city, reg, ctry, tz) => {
+  // Sanitize inputs
+  if (!validateCoords(lat, lon)) {
+    resetOnboard();
+    OB_SKIP.textContent = 'Location invalid \u2014 try again';
+    OB_SKIP.style.display = '';
+    return;
+  }
+  S.lat = clamp(lat, -90, 90);
+  S.lon = clamp(lon, -180, 180);
+  S.city = typeof city === 'string' ? city : '';
+  S.region = typeof reg === 'string' ? reg : '';
+  S.country = typeof ctry === 'string' ? ctry : '';
+  S.tz = (typeof tz === 'string' && tz) || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  // Persist location so onboarding is skipped on future visits
+  try { localStorage.setItem('loc', JSON.stringify({ lat: S.lat, lon: S.lon, city: S.city, region: S.region, country: S.country, tz: S.tz })); } catch {}
+  dismissOnboard();
+  load();
+};
+
+// ── Geolocation error handling ──
+const GEO_ERRORS = {
+  1: { title: 'Location Denied', msg: 'You denied location access. We\u2019ll use your IP address instead.' },
+  2: { title: 'Location Unavailable', msg: 'Your device could not determine its position. Falling back to IP location.' },
+  3: { title: 'Location Timeout', msg: 'Location request timed out. Falling back to IP location.' },
+};
+
+const handleGeoError = err => {
+  const info = GEO_ERRORS[err?.code];
+  if (info) {
+    setBtnLoading(info.msg.slice(0, 40) + '...');
+  }
+  ipFall();
+};
+
+// ── IP fallback with timeout ──
+const fetchWithTimeout = (url, opts = {}, ms = 8000) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+};
+
+const tryIp2 = async () => {
+  try {
+    const res = await fetchWithTimeout('https://get.geojs.io/v1/ip/geo.json', {}, 6000);
+    if (res.ok) {
+      const d = await res.json();
+      const lat = parseFloat(d?.latitude), lon = parseFloat(d?.longitude);
+      if (validateCoords(lat, lon)) {
+        go(lat, lon, d.city ?? '', d.region ?? '', d.country ?? '', d.timezone ?? '');
+        return;
+      }
+    }
+  } catch { /* fall through */ }
+  dismissOnboard();
+  showErr('Location Failed', 'Could not detect location. Check your internet connection.',
+    () => location.reload());
+};
+
+const ipFall = async () => {
+  setBtnLoading('Detecting via IP...');
+  try {
+    const res = await fetchWithTimeout('https://ipwho.is/', {}, 6000);
+    if (res.ok) {
+      const d = await res.json();
+      if (d?.success && validateCoords(d?.latitude, d?.longitude)) {
+        go(d.latitude, d.longitude, d.city ?? '', d.region ?? '', d.country ?? '', d.timezone?.id ?? '');
+        return;
+      }
+    }
+  } catch { /* fall through to backup */ }
+  tryIp2();
+};
+
+const revGeo = async (lat, lon) => {
+  setBtnLoading('Getting your city...');
+  try {
+    const res = await fetchWithTimeout(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`,
+      { headers: { 'Accept-Language': 'en' } },
+      6000
+    );
+    if (res.ok) {
+      const d = await res.json();
+      const a = d?.address ?? {};
+      go(lat, lon, a.city ?? a.town ?? a.village ?? a.municipality ?? a.county ?? '', a.state ?? '', a.country ?? '', null);
+      return;
+    }
+  } catch { /* reverse geocode failed, proceed without city name */ }
+  go(lat, lon, '', '', '', null);
+};
+
+const requestGPS = () => {
+  if (!navigator.geolocation) { ipFall(); return; }
+  setBtnLoading('Waiting for permission...');
+  navigator.geolocation.getCurrentPosition(
+    p => {
+      const { latitude, longitude } = p.coords;
+      if (!validateCoords(latitude, longitude)) { handleGeoError({ code: 2 }); return; }
+      revGeo(latitude, longitude);
+    },
+    handleGeoError,
+    { timeout: 10000, maximumAge: 300000, enableHighAccuracy: false }
+  );
+};
+
+// ── Startup: restore saved location or check permission ──
+const saved = (() => { try { return JSON.parse(localStorage.getItem('loc')); } catch { return null; } })();
+if (saved && validateCoords(saved.lat, saved.lon)) {
+  S.lat = saved.lat; S.lon = saved.lon;
+  S.city = saved.city ?? ''; S.region = saved.region ?? ''; S.country = saved.country ?? '';
+  S.tz = saved.tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const prefetched = window.__data;
+  delete window.__data;
+  if (prefetched) render(prefetched); else load();
+} else {
+  // First visit — check if geolocation permission already granted
+  // Wrapped in try-catch: Safari throws synchronous TypeError for permissions.query
+  try {
+    navigator.permissions?.query({ name: 'geolocation' })
+      .then(r => { if (r.state === 'granted') requestGPS(); })
+      .catch(() => {});
+  } catch {}
+}
+
+OB_BTN.onclick = requestGPS;
+OB_SKIP.onclick = ipFall;
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "napi-core",
+  "version": "0.1.0",
+  "private": true,
+  "devDependencies": {
+    "@napi-rs/cli": "^3.5.1"
+  },
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform"
+  }
+}

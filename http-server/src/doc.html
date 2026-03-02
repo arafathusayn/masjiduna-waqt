@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prayer Times API Documentation</title>
+<style>
+  :root { --bg: #0d1117; --fg: #c9d1d9; --accent: #58a6ff; --border: #30363d; --code-bg: #161b22; --table-alt: #161b22; --green: #3fb950; --orange: #d29922; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; padding: 2rem; max-width: 960px; margin: 0 auto; }
+  h1 { color: var(--accent); margin-bottom: 0.5rem; font-size: 2rem; }
+  h2 { color: var(--accent); margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border); }
+  h3 { color: var(--green); margin-top: 1.5rem; margin-bottom: 0.5rem; }
+  p { margin-bottom: 0.75rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; }
+  pre { background: var(--code-bg); padding: 1rem; border-radius: 8px; overflow-x: auto; margin-bottom: 1rem; border: 1px solid var(--border); }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+  th, td { text-align: left; padding: 0.5rem 0.75rem; border: 1px solid var(--border); font-size: 0.9rem; }
+  th { background: var(--code-bg); color: var(--accent); font-weight: 600; }
+  tr:nth-child(even) { background: var(--table-alt); }
+  .badge { display: inline-block; padding: 0.15em 0.5em; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
+  .get { background: #1f6feb33; color: var(--accent); }
+  .required { background: #f8514933; color: #f85149; }
+  .optional { background: #3fb95033; color: var(--green); }
+  .subtitle { color: #8b949e; margin-bottom: 2rem; }
+  .endpoint { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+  .endpoint code { font-size: 1.05em; }
+</style>
+</head>
+<body>
+
+<h1>Prayer Times API</h1>
+<p class="subtitle">High-performance prayer time computation engine &mdash; Meeus-based solar algorithms, pure Rust.</p>
+
+<h2>Endpoints</h2>
+
+<div class="endpoint">
+  <p><span class="badge get">GET</span> <code>/api/timings/{DD-MM-YYYY}</code> &mdash; Aladhan-compatible format</p>
+</div>
+<div class="endpoint">
+  <p><span class="badge get">GET</span> <code>/api/bd/</code> &mdash; Bangladesh-specific format (habibur-compatible)</p>
+</div>
+<div class="endpoint">
+  <p><span class="badge get">GET</span> <code>/api/docs</code> &mdash; This documentation page</p>
+</div>
+
+<!-- ═══ ALADHAN ROUTE ═══ -->
+
+<h2>1. Aladhan-Compatible Route</h2>
+<p><code>GET /api/timings/{DD-MM-YYYY}?latitude=...&amp;longitude=...</code></p>
+<p>Returns prayer times in a format compatible with the Aladhan API. Date is provided in the URL path as DD-MM-YYYY.</p>
+
+<h3>Parameters</h3>
+<table>
+  <tr><th>Param</th><th>Type</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>latitude</code> <span class="badge required">required</span></td><td>float</td><td>&mdash;</td><td>-90 to 90</td></tr>
+  <tr><td><code>longitude</code> <span class="badge required">required</span></td><td>float</td><td>&mdash;</td><td>-180 to 180</td></tr>
+  <tr><td><code>method</code> <span class="badge optional">optional</span></td><td>int</td><td>3</td><td>Calculation method ID (see table below)</td></tr>
+  <tr><td><code>school</code> <span class="badge optional">optional</span></td><td>int</td><td>0</td><td>0 = Standard (Shafi/Maliki/Hanbali), 1 = Hanafi</td></tr>
+  <tr><td><code>midnightMode</code> <span class="badge optional">optional</span></td><td>int</td><td>0</td><td>0 = Standard (sunset to sunrise), 1 = Jafari (sunset to fajr)</td></tr>
+  <tr><td><code>latitudeAdjustmentMethod</code> <span class="badge optional">optional</span></td><td>int</td><td>3</td><td>1 = Middle of Night, 2 = One Seventh, 3 = Angle Based</td></tr>
+  <tr><td><code>timezonestring</code> <span class="badge optional">optional</span></td><td>string</td><td>UTC</td><td>IANA timezone (e.g. <code>Asia/Dhaka</code>)</td></tr>
+  <tr><td><code>tune</code> <span class="badge optional">optional</span></td><td>string</td><td>&mdash;</td><td>9 comma-separated minute offsets: Imsak,Fajr,Sunrise,Dhuhr,Asr,Maghrib,Sunset,Isha,Midnight</td></tr>
+  <tr><td><code>iso8601</code> <span class="badge optional">optional</span></td><td>bool</td><td>false</td><td>Return times as ISO 8601 datetime strings</td></tr>
+</table>
+
+<h3>Calculation Methods</h3>
+<table>
+  <tr><th>ID</th><th>Name</th><th>Fajr&deg;</th><th>Isha</th></tr>
+  <tr><td>1</td><td>University of Islamic Sciences, Karachi</td><td>18</td><td>18&deg;</td></tr>
+  <tr><td>2</td><td>Islamic Society of North America (ISNA)</td><td>15</td><td>15&deg;</td></tr>
+  <tr><td>3</td><td>Muslim World League</td><td>18</td><td>17&deg;</td></tr>
+  <tr><td>4</td><td>Umm Al-Qura University, Makkah</td><td>18.5</td><td>90 min</td></tr>
+  <tr><td>5</td><td>Egyptian General Authority of Survey</td><td>19.5</td><td>17.5&deg;</td></tr>
+  <tr><td>8</td><td>Gulf Region</td><td>19.5</td><td>90 min</td></tr>
+  <tr><td>9</td><td>Kuwait</td><td>18</td><td>17.5&deg;</td></tr>
+  <tr><td>10</td><td>Qatar</td><td>18</td><td>90 min</td></tr>
+  <tr><td>11</td><td>Majlis Ugama Islam Singapura</td><td>20</td><td>18&deg;</td></tr>
+  <tr><td>12</td><td>Union Organization Islamic de France</td><td>12</td><td>12&deg;</td></tr>
+  <tr><td>13</td><td>Diyanet Isleri Baskanligi, Turkey</td><td>18</td><td>17&deg;</td></tr>
+  <tr><td>14</td><td>Spiritual Administration of Muslims of Russia</td><td>16</td><td>15&deg;</td></tr>
+  <tr><td>15</td><td>Moonsighting Committee Worldwide</td><td>18</td><td>18&deg;</td></tr>
+  <tr><td>16</td><td>Dubai</td><td>18.2</td><td>18.2&deg;</td></tr>
+  <tr><td>17</td><td>JAKIM (Malaysia)</td><td>20</td><td>18&deg;</td></tr>
+  <tr><td>18</td><td>Tunisia</td><td>18</td><td>18&deg;</td></tr>
+  <tr><td>19</td><td>Algeria</td><td>18</td><td>17&deg;</td></tr>
+  <tr><td>20</td><td>KEMENAG (Indonesia)</td><td>20</td><td>18&deg;</td></tr>
+  <tr><td>21</td><td>Morocco</td><td>19</td><td>17&deg;</td></tr>
+  <tr><td>22</td><td>Comunidade Islamica de Lisboa, Portugal</td><td>18</td><td>77 min</td></tr>
+  <tr><td>23</td><td>Ministry of Awqaf, Jordan</td><td>18</td><td>18&deg;</td></tr>
+</table>
+<p><em>Note: Methods 0 (Jafari) and 7 (Tehran) are not supported (Sunni-only engine).</em></p>
+
+<h3>Example Request</h3>
+<pre><code>GET /api/timings/02-03-2026?latitude=23.75&amp;longitude=90.43&amp;method=1&amp;timezonestring=Asia/Dhaka</code></pre>
+
+<h3>Example Response</h3>
+<pre><code>{
+  "code": 200,
+  "status": "OK",
+  "data": {
+    "timings": {
+      "Fajr": "05:01",
+      "Sunrise": "06:17",
+      "Dhuhr": "12:11",
+      "Asr": "15:33",
+      "Sunset": "18:04",
+      "Maghrib": "18:04",
+      "Isha": "19:20",
+      "Imsak": "04:51",
+      "Midnight": "00:10",
+      "Firstthird": "22:08",
+      "Lastthird": "02:12"
+    },
+    "date": {
+      "readable": "02 Mar 2026",
+      "timestamp": "1772524800",
+      "gregorian": { ... },
+      "hijri": null
+    },
+    "meta": {
+      "latitude": 23.75,
+      "longitude": 90.43,
+      "timezone": "Asia/Dhaka",
+      "method": { "id": 1, "name": "...", "params": { ... } },
+      "latitudeAdjustmentMethod": "ANGLE_BASED",
+      "midnightMode": "STANDARD",
+      "school": "STANDARD",
+      "offset": { ... }
+    }
+  }
+}</code></pre>
+
+<!-- ═══ BD ROUTE ═══ -->
+
+<h2>2. Bangladesh Route</h2>
+<p><code>GET /api/bd/?lat=...&amp;lon=...</code></p>
+<p>Returns 16 prayer/time entries using the Karachi 18/18 method with both Shafi and Hanafi Asr times. Compatible with <code>salat.habibur.com</code> format.</p>
+
+<h3>Parameters</h3>
+<table>
+  <tr><th>Param</th><th>Type</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>lat</code> <span class="badge required">required</span></td><td>float</td><td>&mdash;</td><td>Latitude (-90 to 90)</td></tr>
+  <tr><td><code>lon</code> <span class="badge required">required</span></td><td>float</td><td>&mdash;</td><td>Longitude (-180 to 180)</td></tr>
+  <tr><td><code>tzname</code> <span class="badge optional">optional</span></td><td>string</td><td>UTC</td><td>IANA timezone name</td></tr>
+  <tr><td><code>date</code> <span class="badge optional">optional</span></td><td>string</td><td>today</td><td>ISO date (YYYY-MM-DD)</td></tr>
+</table>
+
+<h3>Response Fields</h3>
+<table>
+  <tr><th>Field</th><th>Description</th></tr>
+  <tr><td><code>fajar18</code></td><td>Fajr (18&deg; depression)</td></tr>
+  <tr><td><code>rise</code></td><td>Sunrise</td></tr>
+  <tr><td><code>noon</code></td><td>Dhuhr / Solar noon</td></tr>
+  <tr><td><code>asar1</code></td><td>Asr (Standard / Shafi)</td></tr>
+  <tr><td><code>asar2</code></td><td>Asr (Hanafi)</td></tr>
+  <tr><td><code>set</code></td><td>Sunset / Maghrib</td></tr>
+  <tr><td><code>magrib12</code></td><td>Maghrib at -12&deg; depression</td></tr>
+  <tr><td><code>esha</code></td><td>Isha</td></tr>
+  <tr><td><code>night1</code></td><td>First third of the night</td></tr>
+  <tr><td><code>midnight</code></td><td>Middle of the night</td></tr>
+  <tr><td><code>night2</code></td><td>Two-thirds of the night</td></tr>
+  <tr><td><code>night6</code></td><td>Five-sixths of the night</td></tr>
+  <tr><td><code>sehri</code></td><td>Sehri (Fajr - 1 second)</td></tr>
+  <tr><td><code>setstart</code></td><td>Sunset start (Sunset - 3 minutes)</td></tr>
+  <tr><td><code>ishraq</code></td><td>Ishraq (Sunrise + 15 minutes)</td></tr>
+  <tr><td><code>asarend</code></td><td>Asr end (Sunset - 30 minutes)</td></tr>
+</table>
+
+<p>Each time entry has the format: <code>{"short": "5:01 am", "long": "5:01:23 am", "secs": 1772506883}</code></p>
+
+<h3>Example Request</h3>
+<pre><code>GET /api/bd/?lat=23.75&amp;lon=90.43&amp;tzname=Asia/Dhaka&amp;date=2026-03-02</code></pre>
+
+<!-- ═══ ERRORS ═══ -->
+
+<h2>Error Responses</h2>
+<p>All errors return JSON with appropriate HTTP status codes:</p>
+<pre><code>{
+  "code": 400,
+  "status": "Bad Request",
+  "data": "latitude is required"
+}</code></pre>
+
+<table>
+  <tr><th>Code</th><th>When</th></tr>
+  <tr><td>400</td><td>Missing required parameters, invalid values, bad date format, unknown method</td></tr>
+  <tr><td>404</td><td>Unknown route</td></tr>
+</table>
+
+<h2>Notes</h2>
+<ul style="margin-left: 1.5rem; margin-bottom: 1rem;">
+  <li>All computations use Meeus-based solar position algorithms (Chapter 25) with 3-day interpolation (Chapter 15)</li>
+  <li>Hijri date is currently returned as <code>null</code> (planned for future release)</li>
+  <li>Methods 0 (Jafari) and 7 (Tehran) are not supported &mdash; this is a Sunni-only engine</li>
+  <li>Times are rounded to the nearest minute for display</li>
+</ul>
+
+</body>
+</html>

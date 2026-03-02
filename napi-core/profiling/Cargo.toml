@@ -1,0 +1,18 @@
+[package]
+name = "napi-profiling"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# No napi dependency — pure Rust engine only
+
+[profile.release]
+opt-level = 3
+panic = "abort"
+codegen-units = 1
+
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = false
+lto = "thin"
