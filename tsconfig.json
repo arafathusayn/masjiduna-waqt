@@ -1,5 +1,5 @@
 {
-  "exclude": ["dist", "node_modules", "tests/dist-sanity", "benchmarks"],
+  "exclude": ["dist", "node_modules", "tests/dist-sanity", "benchmarks", "http-server", "src/wasm", "api", "tests/wasm"],
   "compilerOptions": {
     // Environment setup & latest features
     "lib": ["ESNext"],
