@@ -1,5 +1,5 @@
 {
-  "exclude": ["dist", "node_modules", "tests/dist-sanity"],
+  "exclude": ["dist", "node_modules", "tests/dist-sanity", "benchmarks"],
   "compilerOptions": {
     // Environment setup & latest features
     "lib": ["ESNext"],
